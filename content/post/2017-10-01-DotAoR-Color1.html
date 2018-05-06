@@ -1,0 +1,116 @@
+---
+title: 'Data of the Age of Reptiles: Part 2 - Color'
+author: Ryan Timpe
+date: '2017-12-24'
+slug: AOR-color1
+categories:
+  - Dinosaurs
+  - Data Viz
+tags:
+  - Age of Reptiles
+  - R
+summary: "Analysis of Zallinger's use of color in the mural and the differences between geological periods."
+header: 
+  image: "posts/AgeOfReptilesColor.jpg"
+  caption: "[**Yale Peabody Museum**](http://peabody.yale.edu/exhibits/age-reptiles-mural)"
+---
+
+
+
+<p><em>Work in Progress</em></p>
+<div id="color" class="section level3">
+<h3>Color</h3>
+<p>Zallinger’s use of different colors in each of the geological periods depicted in the mural was my motivation for beginning this project. The Carboniferous period, when the earth was covered in swamp forests and the atmosphere had 50% more oxygen, is depicted with vivid greens at the far right end of the painting. Does Zallinger have similar logic behind his depictions of the Permian period, with pink skies and rocks, and his use of greys and blues in the Cretaceous period on the far left?</p>
+<p>There are a lot potential questions surrounding the colors, but I’ll start with the easy ones in this post.</p>
+</div>
+<div id="average-color-by-period" class="section level3">
+<h3>Average color by period</h3>
+<p>What’s the dominant color in each period? I began by finding the “average” color of each period. I calculated the mean red, blue, and green channel values in each period, and then converted them into a single color. I repeated this for groups of every 10 pixels along the horizontal axis.</p>
+<p><img src="/post/2017-10-01-DotAoR-Color1_files/figure-html/avg_color-1.png" width="960" /></p>
+<p>This analysis confirms what we can see in the original painting - the Permian period is the most red with a 49% average value, and through the bottom chart, I can see it’s driven primarily from the light skies and rocks in the middle portion of the period.</p>
+<p>These shades of gray, however, don’t give much insight into Zallinger’s use of different colors througout the painting. My next step was to plot the R, G, and B channels independently to study the distribution of colors.</p>
+<p>Computers treat light and color differently than a painter does - a white pixel has 100% values for each of the three channels, but Zallinger did not use three colors of paint to get a white portion of the painting.</p>
+</div>
+<div id="paint-colors-in-the-mural" class="section level3">
+<h3>Paint colors in the mural</h3>
+<p>Rather than treating each color channel independently as color, I mapped each combination of channel values to a named color (Red, Green, Blue, or Gray). These are the colors we see in image and the shades of paint Zallinger used in the mural.</p>
+<pre class="r"><code>#If a given channel accounts for more than 34% of the light...
+#... and is the brightest channel...
+#... assign it that color
+
+color_threshold &lt;- 0.34 #high values here will allocate more pixels to &quot;Gray&quot;
+aor.color.prop &lt;- aor.colors.1 %&gt;% 
+  mutate(Rp = R / (R+G+B), 
+         Gp = G / (R+G+B),
+         Bp = B / (R+G+B)) %&gt;% 
+  mutate(color_name = case_when(
+    Rp &gt;= color_threshold &amp; Rp &gt; Gp &amp; Rp &gt; Bp ~ &quot;(B) Red&quot;,
+    Gp &gt;= color_threshold &amp; Gp &gt; Rp &amp; Gp &gt; Bp ~ &quot;(C) Green&quot;, 
+    Bp &gt;= color_threshold &amp; Bp &gt; Rp &amp; Bp &gt; Gp ~ &quot;(D) Blue&quot;,
+    TRUE ~ &quot;(A) Gray&quot; #If the 3 channels are similar, the color is a shade of grey
+  )) </code></pre>
+<table>
+<caption>(#tab:calc_paint_table)Colors used in Age of Reptiles</caption>
+<thead>
+<tr class="header">
+<th align="left">color_name</th>
+<th align="center">n</th>
+<th align="center">share</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td align="left">(A) Gray</td>
+<td align="center">33458</td>
+<td align="center">16 %</td>
+</tr>
+<tr class="even">
+<td align="left">(B) Red</td>
+<td align="center">67911</td>
+<td align="center">32.5 %</td>
+</tr>
+<tr class="odd">
+<td align="left">(C) Green</td>
+<td align="center">71541</td>
+<td align="center">34.3 %</td>
+</tr>
+<tr class="even">
+<td align="left">(D) Blue</td>
+<td align="center">35840</td>
+<td align="center">17.2 %</td>
+</tr>
+</tbody>
+</table>
+<p>The resulting table shows use that Zallinger primarily used shades green and red in the mural, and then less so grays and blues.</p>
+<p>A more interesting analysis is to actually view the mural filtered by this new information. With each pixel assigned to a single color, I rendered the mural into 4 images, including only the pixels of a single color.</p>
+<p><img src="/post/2017-10-01-DotAoR-Color1_files/figure-html/aor_by_color-1.png" width="960" /></p>
+<p>Shades of blue are primarily used for the animals, while the shades of red are used for the remaining dinosaurs and the background. This can also be seen in the negative regions of the green colors.</p>
+<p>The shades are green are almost exclusively used for plants, along with a couple of the animals in the Permian period.</p>
+</div>
+<div id="histogram-of-colors" class="section level3">
+<h3>Histogram of colors</h3>
+<p>With a small modification to the data, I collapsed the white space and turned the chart above into a form of histogram to see Zallinger’s distribution of colors throughout the painting. This is also my favorite chart so far in this series.</p>
+<p><img src="/post/2017-10-01-DotAoR-Color1_files/figure-html/color_hist-1.png" width="960" /></p>
+<p>Viewing the data this way provides a slightly more quantitative way to view Zallinger’s use of color over the periods of the painting.</p>
+<ul>
+<li>The shades of red peak during the Triassic and Permian period.</li>
+<li>Greens are used heavily everywhere and the Carboniferous period is almost exclusively green.</li>
+<li>Blue paints are used sparingly, but there are a few areas of heavy use.
+<ul>
+<li>Volcanoes and T.rex in the Cretaceous</li>
+<li>Brontosaurus in the Jurassic</li>
+<li>Plateosaurus in the Triassic</li>
+<li>Edaphosaurus in the Permian</li>
+</ul></li>
+<li>Shades of grey and white are used consistently over the entire mural.</li>
+</ul>
+</div>
+<div id="another-histogram" class="section level3">
+<h3>Another histogram</h3>
+<p>Finally, I collapsed the four charts into a single histogram, replacing each color with the average value of that color in each of the periods, tying the analysis back to the original gray chart.</p>
+<p><img src="/post/2017-10-01-DotAoR-Color1_files/figure-html/single_hist-1.png" width="960" /></p>
+<p>In addition to showing proportions of color throughout the mural, this chart also displays the relative brightness of each of the colors.</p>
+<hr />
+<p><em>This is the second in a series of posts about the Age of Reptiles. <a href="../../../../tags/age-of-reptiles">See more here.</a></em></p>
+<p><em>These posts are a work in progress and will be edited over time.</em></p>
+</div>

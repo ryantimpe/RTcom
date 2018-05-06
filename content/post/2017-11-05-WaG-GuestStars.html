@@ -1,0 +1,210 @@
+---
+title: 'Will & Grace - Guest Star Paradox'
+author: Ryan Timpe
+date: '2017-11-05'
+slug: WaG-GuestStars
+categories:
+  - Television
+  - Pop Culture
+  - Data Viz
+tags:
+  - Will & Grace
+  - R
+summary: "Finding impossible guest stars in the television show Will & Grace."
+header: 
+  image: "posts/WaG-Paradox.jpg"
+---
+
+
+
+<div id="guest-stars-in-will-grace" class="section level3">
+<h3>Guest Stars in <em>Will &amp; Grace</em></h3>
+<p>Will &amp; Grace is known for its sharp, current events humor and pop culture name drops. Over the course of its eight (and now nine, ten, …) seasons, it also hosted <a href="http://ew.com/gallery/will-and-grace-guest-stars/the-best-will-and-grace-guest-stars">at least 50</a> guest stars, some of whom were also name dropped on the show.</p>
+</div>
+<div id="which-guest-stars-were-also-discussed-on-the-show" class="section level3">
+<h3>Which guest stars were also discussed on the show?</h3>
+<p>My first goal was to find the overlap between celebrities who have appeared in the show and celebrities who have been referenced in the show’s dialogue. I began by scraping the <a href="https://www.springfieldspringfield.co.uk/episode_scripts.php?tv-show=will-and-grace">transcripts</a> from every episode and the list of all <a href="http://www.imdb.com/title/tt0157246/fullcredits?ref_=tt_cl_sm#cast">credited actors</a> from IMDB.</p>
+<p>Using the <a href="http://tidytextmining.com/">tidytext</a> package in R, I broke every transcript into 1-, 2-, and 3-word ngrams. This assumes every actor goes by 1, 2, or 3 names. Merging this with the list of actor names from IMDB, I get a complete list of actors who have both appeared in the show and have been discussed by the characters.</p>
+<p>Overall, there are at least 39 guest stars on Will &amp; Grace who were also referenced in the show’s dialogue. This estimate is a lower bound, as the analysis won’t find celebrites that were mentioned only by first name but are known by their full names (unlike Madonna and Cher). It also did not flag any jokes where the actor made a pun using part of the celebrity’s name.</p>
+<div id="celebrities-both-guest-starred-referenced-at-least-3-times." class="section level4">
+<h4>Celebrities both guest starred &amp; referenced at least 3 times.</h4>
+<table>
+<thead>
+<tr class="header">
+<th align="left">Actor</th>
+<th align="left">Character</th>
+<th align="right"># Eps Referenced</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td align="left">Cher</td>
+<td align="left">Cher</td>
+<td align="right">11</td>
+</tr>
+<tr class="even">
+<td align="left">Madonna</td>
+<td align="left">Liz</td>
+<td align="right">6</td>
+</tr>
+<tr class="odd">
+<td align="left">Kevin Bacon</td>
+<td align="left">Kevin Bacon</td>
+<td align="right">5</td>
+</tr>
+<tr class="even">
+<td align="left">Matt Lauer</td>
+<td align="left">Matt Lauer</td>
+<td align="right">5</td>
+</tr>
+<tr class="odd">
+<td align="left">Katie Couric</td>
+<td align="left">Herself</td>
+<td align="right">4</td>
+</tr>
+<tr class="even">
+<td align="left">Britney Spears</td>
+<td align="left">Amber-Louise</td>
+<td align="right">3</td>
+</tr>
+<tr class="odd">
+<td align="left">Elton John</td>
+<td align="left">Elton John</td>
+<td align="right">3</td>
+</tr>
+<tr class="even">
+<td align="left">Jennifer Lopez</td>
+<td align="left">Jennifer Lopez</td>
+<td align="right">3</td>
+</tr>
+<tr class="odd">
+<td align="left">Matt Damon</td>
+<td align="left">Owen</td>
+<td align="right">3</td>
+</tr>
+<tr class="even">
+<td align="left">Salma Hayek</td>
+<td align="left">Herself (uncredited)</td>
+<td align="right">3</td>
+</tr>
+</tbody>
+</table>
+<p>Of those 39 guest stars, 22 appeared as themselves (or as caricatures of themselves).</p>
+</div>
+</div>
+<div id="the-guest-star-paradox" class="section level3">
+<h3>The Guest Star Paradox</h3>
+<p>What about the other guest stars? These actors were referenced by name in at least one episode, but then appeared in another episode as a character.</p>
+<p>As an example, Madonna is discussed in six different episodes (plus another in Season 9), but she also played Karen’s roommate Liz in a Season 5 episode. This creates a minor paradox, as both Madonna and Liz shouldn’t exist in the same universe.</p>
+<p><img src="/post/2017-11-05-WaG-GuestStars_files/figure-html/chart_madonna-1.png" width="960" /></p>
+<p>In total there are at least 17 of these paradox situations. They are also some of the most notable guest appearances by the most famous guest stars [citation needed]. This is to be expected, as more famous/iconic celebrities are more likely to be mentioned in conversation, while also more likely to have substantial guest starring roles, rather than brief cameos. The entire list is printed at the bottom of this post.</p>
+<p>Other notable examples include <strong>Britney Spears</strong>, Rosie O’Donnell, Ellen Degeneres, and Alec Baldwin.</p>
+<p><img src="/post/2017-11-05-WaG-GuestStars_files/figure-html/chart_britney-1.png" width="960" /></p>
+</div>
+<div id="total-references-in-all-episodes" class="section level3">
+<h3>Total references in all episodes</h3>
+<p>Although Cher’s two(!) appearances on Will &amp; Grace do not create a paradox, she is the most referenced celebrity throughout the eight season with 38 total references.</p>
+<p><img src="/post/2017-11-05-WaG-GuestStars_files/figure-html/chart_cher-1.png" width="960" /></p>
+<p>This is followed by 12 references about Katie Couric and 11 about Barry Manilow and Kevin Bacon. Madonna is the most referenced paradox guest star with 7 references over 6 episodes.</p>
+</div>
+<div id="full-list-of-the-guest-star-paradoxes" class="section level3">
+<h3>Full list of the guest star paradoxes</h3>
+<table>
+<thead>
+<tr class="header">
+<th align="left">Actor</th>
+<th align="left">Character</th>
+<th align="right"># Eps Referenced</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td align="left">Madonna</td>
+<td align="left">Liz</td>
+<td align="right">6</td>
+</tr>
+<tr class="even">
+<td align="left">Britney Spears</td>
+<td align="left">Amber-Louise</td>
+<td align="right">3</td>
+</tr>
+<tr class="odd">
+<td align="left">Matt Damon</td>
+<td align="left">Owen</td>
+<td align="right">3</td>
+</tr>
+<tr class="even">
+<td align="left">Ellen Degeneres</td>
+<td align="left">Sister Louise</td>
+<td align="right">2</td>
+</tr>
+<tr class="odd">
+<td align="left">Taye Diggs</td>
+<td align="left">James Hanson</td>
+<td align="right">2</td>
+</tr>
+<tr class="even">
+<td align="left">Alec Baldwin</td>
+<td align="left">Malcolm</td>
+<td align="right">1</td>
+</tr>
+<tr class="odd">
+<td align="left">Andy Richter</td>
+<td align="left">Dale</td>
+<td align="right">1</td>
+</tr>
+<tr class="even">
+<td align="left">Bernadette Peters</td>
+<td align="left">Gin</td>
+<td align="right">1</td>
+</tr>
+<tr class="odd">
+<td align="left">Chita Rivera</td>
+<td align="left">Lenore</td>
+<td align="right">1</td>
+</tr>
+<tr class="even">
+<td align="left">Demi Moore</td>
+<td align="left">Sissy Palmer-Ginsburg</td>
+<td align="right">1</td>
+</tr>
+<tr class="odd">
+<td align="left">Joan Collins</td>
+<td align="left">Helena Barnes</td>
+<td align="right">1</td>
+</tr>
+<tr class="even">
+<td align="left">Lee Majors</td>
+<td align="left">Burt Wolfe</td>
+<td align="right">1</td>
+</tr>
+<tr class="odd">
+<td align="left">Michael Douglas</td>
+<td align="left">Detective Gavin Hatch</td>
+<td align="right">1</td>
+</tr>
+<tr class="even">
+<td align="left">Michele Lee</td>
+<td align="left">Lucille</td>
+<td align="right">1</td>
+</tr>
+<tr class="odd">
+<td align="left">Minnie Driver</td>
+<td align="left">Lorraine Finster</td>
+<td align="right">1</td>
+</tr>
+<tr class="even">
+<td align="left">Rosie O’donnell</td>
+<td align="left">Bonnie</td>
+<td align="right">1</td>
+</tr>
+<tr class="odd">
+<td align="left">Woody Harrelson</td>
+<td align="left">Nathan</td>
+<td align="right">1</td>
+</tr>
+</tbody>
+</table>
+<hr />
+<p><em>This post is a work in progress and will be edited over time. Yes, I spent my extra Daylights Savings hour doing silly data analysis.</em></p>
+</div>

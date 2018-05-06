@@ -1,0 +1,366 @@
+---
+title: 'Generating dinosaur names using deep learning'
+author: Ryan Timpe
+date: '2018-02-09'
+slug: Kerasaurs1
+categories:
+  - Dinosaurs
+  - Machine Learning
+tags:
+  - Datasaurs
+  - R
+summary: "Using Keras to generate new dinosaur names and display them on phylogenetic trees."
+header: 
+  image: "posts/Kerasaurs1.jpg"
+
+---
+
+
+
+<div id="deep-learning-with-keras" class="section level3">
+<h3>Deep learning with Keras</h3>
+<p>RStudio just released a <a href="https://blog.rstudio.com/2018/02/06/tensorflow-for-r/">new package</a> and <a href="https://www.amazon.com/Deep-Learning-R-Francois-Chollet/dp/161729554X">book</a> for neural networks and machine learning in R. I’m excited to learn all of the finer details of <a href="https://keras.rstudio.com/index.html">TensorFlow and Keras</a>, but I’m also a bit impatient.</p>
+<p>For better or worse, I decided to jump (mostly) blind-folded into the package and see what I can produce.</p>
+</div>
+<div id="the-goal" class="section level3">
+<h3>The Goal</h3>
+<p>If you look around the rest of this site, you’ll notice that my brand is <a href="../../../../categories/dinosaurs/">dinosaurs</a> (and <a href="../../../../categories/pop-culture/">divas</a>). So… <strong>Can I train a deep learning model to develop new dinosaur names?</strong></p>
+</div>
+<div id="the-data" class="section level3">
+<h3>The Data</h3>
+<p>I trained a model using 1865 genus names of dinosaurs, pterosaurs, mosasaurs, ichthyosaurs, and plesiosaurs. The latter 4 are not dinosaurs, but I wanted to increase my training data set to include as many extinct “saurs” as I could find.</p>
+<p>I also used 217 <a href="https://github.com/ryantimpe/datasaurs/tree/master/PhyloPic">silhouette images</a> of dinosaurs and other animals from <a href="http://phylopic.org/image/browse/">PhyloPic</a>. I had collected these for <a href="https://twitter.com/datasaurs">Datasaurs</a>, a Twitter bot finding correlations between dinosaur shapes and US cause of death time series.<a href="#fn1" class="footnoteRef" id="fnref1"><sup>1</sup></a></p>
+</div>
+<div id="the-model" class="section level3">
+<h3>The Model</h3>
+<div id="developers" class="section level4">
+<h4>Developers</h4>
+<p>I had it easy for this project. <a href="https://twitter.com/skyetetra">Jonathan Nolis</a> published his project to generate <a href="https://towardsdatascience.com/using-deep-learning-to-generate-offensive-license-plates-619b163ed937">offensive license plates</a> that would be banned in Arizona. He based his work off of the Keras example creating new <a href="https://keras.rstudio.com/articles/examples/lstm_text_generation.html">text in the style of Nietzsche</a>. Jonathan figured that predicting letters from license plates isn’t much different than predicting words from tomes. Generating new dinosaurs names was the logical next step, of course.</p>
+</div>
+<div id="an-explanation" class="section level4">
+<h4>An Explanation</h4>
+<p>The links I embedded above lay out the logic and inner workings of the model in much more detail than I will here (as I said, I’m still a beginner with deep learning and neural networks). The algorithm commonly used for text prediction is <a href="https://medium.com/datalogue/attention-in-keras-1892773a4f22">Recurrent Neural Networks (RNN)</a>. Given a string a characters (or words), the algorithm chooses the next character (or word) based off the distribution of those sequences in the training data.</p>
+<p>In this case, the training data is the list of those 1865 extinct animal names. As you can imagine, among these names, the sequence “…saur…” shows up many times in that list.<a href="#fn2" class="footnoteRef" id="fnref2"><sup>2</sup></a></p>
+<p>When the model is generating a new name, it has an intermediate sequence of letters that begin the name and needs to add a character. Assume the model iteration is currently at saur* and it is about a pick a new character. There are 27 possible options for the model to choose from: the 26 letters of the alphabet and the option for the model to stop adding letters. However, those 27 options are not equally likely - the probability of each one comes from the training data.</p>
+<p>Below, is a simplified illustration of the saur* example. Rather than 27 options for a next character, assume there are only 4 possible letters and a stop character. Selecting the “u” as the next character is the most likely scenario, followed by “a” or “(stop)”.</p>
+<div id="probability-of-letters-after-saur" class="section level5">
+<h5>Probability of letters after ‘saur*’</h5>
+<table class="table table-striped" style="width: auto !important; margin-left: auto; margin-right: auto;">
+<thead>
+<tr>
+<th style="text-align:left;">
+Next Letter
+</th>
+<th style="text-align:right;">
+Probability
+</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align:left;">
+u
+</td>
+<td style="text-align:right;">
+0.45
+</td>
+</tr>
+<tr>
+<td style="text-align:left;">
+a
+</td>
+<td style="text-align:right;">
+0.15
+</td>
+</tr>
+<tr>
+<td style="text-align:left;">
+i
+</td>
+<td style="text-align:right;">
+0.12
+</td>
+</tr>
+<tr>
+<td style="text-align:left;">
+o
+</td>
+<td style="text-align:right;">
+0.12
+</td>
+</tr>
+<tr>
+<td style="text-align:left;">
+(stop)
+</td>
+<td style="text-align:right;">
+0.15
+</td>
+</tr>
+</tbody>
+</table>
+<p>From there, the chain will continue. If the model samples the “u” from the selection of characters, then it’s probable that the next character after that would be an “s” and then stop after that - yielding “saurus.” If the model samples the “a” and then stops, the result would be “saura.”</p>
+</div>
+</div>
+<div id="changing-the-temperature" class="section level4">
+<h4>Changing the Temperature</h4>
+<p>One of the hyperparameters in the model is <a href="https://cs.stackexchange.com/questions/79241/what-is-temperature-in-lstm-and-neural-networks-generally/79242#79242">temperature</a>. A value of 1 means that each character is sampled with the default probabilities (e.g. 45% chance for “u” after “saur*”). Decreasing this value below 1 increases the probabilities of the more likely characters, creating more conservative predictions. Temperature values above 1 work the opposite way, moving all probabilities closer to each other.</p>
+<div id="probability-of-letters-after-saur-with-varying-temperature" class="section level5">
+<h5>Probability of letters after ‘saur*’ with varying temperature</h5>
+<table class="table table-striped" style="width: auto !important; margin-left: auto; margin-right: auto;">
+<thead>
+<tr>
+<th style="text-align:left;">
+Next Letter
+</th>
+<th style="text-align:right;">
+Prob (T=0.25)
+</th>
+<th style="text-align:right;">
+Prob (T=0.5)
+</th>
+<th style="text-align:right;">
+Prob (T=1)
+</th>
+<th style="text-align:right;">
+Prob (T=2)
+</th>
+<th style="text-align:right;">
+Prob (T=4)
+</th>
+<th style="text-align:right;">
+Prob (T=10)
+</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align:left;">
+u
+</td>
+<td style="text-align:right;">
+0.97
+</td>
+<td style="text-align:right;">
+0.73
+</td>
+<td style="text-align:right;">
+0.45
+</td>
+<td style="text-align:right;">
+0.31
+</td>
+<td style="text-align:right;">
+0.25
+</td>
+<td style="text-align:right;">
+0.22
+</td>
+</tr>
+<tr>
+<td style="text-align:left;">
+a
+</td>
+<td style="text-align:right;">
+0.01
+</td>
+<td style="text-align:right;">
+0.08
+</td>
+<td style="text-align:right;">
+0.15
+</td>
+<td style="text-align:right;">
+0.18
+</td>
+<td style="text-align:right;">
+0.19
+</td>
+<td style="text-align:right;">
+0.20
+</td>
+</tr>
+<tr>
+<td style="text-align:left;">
+i
+</td>
+<td style="text-align:right;">
+0.01
+</td>
+<td style="text-align:right;">
+0.05
+</td>
+<td style="text-align:right;">
+0.12
+</td>
+<td style="text-align:right;">
+0.16
+</td>
+<td style="text-align:right;">
+0.18
+</td>
+<td style="text-align:right;">
+0.19
+</td>
+</tr>
+<tr>
+<td style="text-align:left;">
+o
+</td>
+<td style="text-align:right;">
+0.01
+</td>
+<td style="text-align:right;">
+0.05
+</td>
+<td style="text-align:right;">
+0.12
+</td>
+<td style="text-align:right;">
+0.16
+</td>
+<td style="text-align:right;">
+0.18
+</td>
+<td style="text-align:right;">
+0.19
+</td>
+</tr>
+<tr>
+<td style="text-align:left;">
+(stop)
+</td>
+<td style="text-align:right;">
+0.01
+</td>
+<td style="text-align:right;">
+0.08
+</td>
+<td style="text-align:right;">
+0.15
+</td>
+<td style="text-align:right;">
+0.18
+</td>
+<td style="text-align:right;">
+0.19
+</td>
+<td style="text-align:right;">
+0.20
+</td>
+</tr>
+</tbody>
+</table>
+<p>In the example above, as the temperature approaches 0, the probability of the model selecting “u” as the next character climbs closer to 100%. On the other side of T=1, as the temperature approaches infinity, each option becomes equally likely (the prediction is a random draw). In the example with 5 possible characters, each has a 20% chance of being selected. In the full model with 27 characters, each has a 3.7% (1/27) chance.</p>
+<p>For the results in this post<a href="#fn3" class="footnoteRef" id="fnref3"><sup>3</sup></a>, I sampled 500 new names from the model with temperatures varying from 0.5 to 1.5. 460 of the resulting names were unique, and 283 of those not currently named dinosaurs. Other runs of the model with lower (more conservative) temperature values yielded more duplicates and more actual dinosaur names.</p>
+</div>
+</div>
+</div>
+<div id="phylogenetic-tree" class="section level3">
+<h3>Phylogenetic tree</h3>
+<p>I accomplished my goal (and learned something!): I tuned a deep learning model to come up with a handful of mostly believable dinosaur names. Now the fun part - creating nonsense phylogenetic trees to display the nonsense dinosaurs.</p>
+<p>To add some legitimacy to this project, I used it as an opportunity to practice my <a href="http://adv-r.had.co.nz/Functional-programming.html">functional programming</a>. In short, each tree is developed by:</p>
+<ul>
+<li>Sampling N model-generated dinosaur names (16 is a good number)</li>
+<li>Using the <code>adist()</code> function in base R to compare the names with the names of actual animals in the PhyloPic database. An image of an animal with a name similar to the generated name was selected to represent the animal graphically.</li>
+<li>Assign each of the N dinosaurs an x-position and y-position.</li>
+<li>Create a tree linking each dinosaur with one to the left of it.</li>
+<li>Plot with <code>geom_path()</code> + <code>geom_raster()</code> + <code>geom_label()</code>.</li>
+</ul>
+<p>Check out the code on <a href="https://github.com/ryantimpe/Kerasaurs/blob/master/2_Names_Run%20Chart.R">GitHub</a> to run your own trees!</p>
+<pre class="r"><code>n_kerasaurs &lt;- 16
+phylo_resolution &lt;- 32
+
+kerasaurs #Full list of model-generated names
+phylo #List of PhyloPic images
+
+kerasaurs %&gt;% 
+  find_similar_phylopic(phylo) %&gt;% 
+  create_tree_data( n_kerasaurs, phylo_resolution) %&gt;% 
+  generate_tree(phylo_resolution)</code></pre>
+<p>Running this function any number of times will results in the images below:</p>
+<p><img src="/post/2018-02-09-Kersaurs1_files/figure-html/tree_run-1.png" width="672" /></p>
+<p><img src="/post/2018-02-09-Kersaurs1_files/figure-html/tree_run2-1.png" width="672" /></p>
+<p><img src="/post/2018-02-09-Kersaurs1_files/figure-html/tree_run3-1.png" width="672" /></p>
+<p><img src="/post/2018-02-09-Kersaurs1_files/figure-html/tree_run4-1.png" width="672" /></p>
+</div>
+<div class="footnotes">
+<hr />
+<ol>
+<li id="fn1"><p>One of the greatest scientific discoveries of the 21st century.<a href="#fnref1">↩</a></p></li>
+<li id="fn2"><p>Exactly 834 of the 1865 training animals contain the string “saur” in the name. Below are some other common character combinations in the training data.</p>
+<table class="table table-striped" style="width: auto !important; margin-left: auto; margin-right: auto;">
+<thead>
+<tr>
+<th style="text-align:left;">
+Pattern
+</th>
+<th style="text-align:right;">
+Freq
+</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align:left;">
+saur
+</td>
+<td style="text-align:right;">
+834
+</td>
+</tr>
+<tr>
+<td style="text-align:left;">
+odon
+</td>
+<td style="text-align:right;">
+84
+</td>
+</tr>
+<tr>
+<td style="text-align:left;">
+tops
+</td>
+<td style="text-align:right;">
+68
+</td>
+</tr>
+<tr>
+<td style="text-align:left;">
+ylus
+</td>
+<td style="text-align:right;">
+55
+</td>
+</tr>
+<tr>
+<td style="text-align:left;">
+raptor
+</td>
+<td style="text-align:right;">
+47
+</td>
+</tr>
+<tr>
+<td style="text-align:left;">
+titan
+</td>
+<td style="text-align:right;">
+34
+</td>
+</tr>
+<tr>
+<td style="text-align:left;">
+mimus
+</td>
+<td style="text-align:right;">
+19
+</td>
+</tr>
+</tbody>
+</table>
+<a href="#fnref2">↩</a></li>
+<li id="fn3"><p>I knew the model was tuned correctly when it produced “ponysaurus”. Apparently this is also the name of a <a href="http://ponysaurusbrewing.com/">brewery</a> in North Carolina.</p>
+<p><img src="/img/ponysaurus.png" title="fig:" alt="ponysaurus" id="id" class="class" width="300" /><a href="#fnref3">↩</a></p></li>
+</ol>
+</div>

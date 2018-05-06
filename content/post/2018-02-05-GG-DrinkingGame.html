@@ -1,0 +1,119 @@
+---
+title: 'The Golden Girls Drinking Game: A Tidytext Analysis'
+author: Ryan Timpe
+date: '2018-02-05'
+slug: GG-DrinkingGame
+categories:
+  - Television
+  - Pop Culture
+  - Data Viz
+tags:
+  - Golden Girls
+  - R
+summary: "Using tidytext principals to determine which season optimizes the Golden Girls drinking game."
+header: 
+  image: "posts/GG-DrinkingGame.jpg"
+
+---
+
+
+
+<p>I had set out to build a Twitter bot that would come up with new Golden Girls quotes… I failed. I decided that in order to build a better bot, I should have a better understanding of the input text: Golden Girls episode transcripts. The obvious choice was a <a href="https://cran.r-project.org/web/packages/tidytext/vignettes/tidytext.html">tidytext</a> analysis of the scripts using <a href="https://twitter.com/juliasilge">Julia Silge</a>’s package and paradigm.</p>
+<p>This approach has been used on many texts by now, from Pride and Prejudice to <a href="http://varianceexplained.org/r/trump-tweets/">Donald Trump’s tweets</a>. For this post, I am going to jump off the rails a bit and do a tidytext analysis for… <strong>The Golden Girls drinking game.</strong><a href="#fn1" class="footnoteRef" id="fnref1"><sup>1</sup></a></p>
+<div id="the-rules" class="section level3">
+<h3>The Rules</h3>
+<p>There are many versions of the game across the internet. For this analysis, I’m going to use these rules: Drink each time…</p>
+<ul>
+<li>The ladies eat cheesecake</li>
+<li>Rose tells a story about St. Olaf</li>
+<li>Blanche (or anyone) is called a slut</li>
+<li>Sophia begins a story “Picture it:”</li>
+<li>Dorothy exclaims “38 years” or says “It’s me, Stan”</li>
+</ul>
+</div>
+<div id="the-goal" class="section level3">
+<h3>The Goal</h3>
+<p>In this age of binge-watching and binge-drinking, I’m setting out to the find (but not endorse) the solution to a simple question: <strong>Which season of Golden Girls should you watch to maximize drink consumption?</strong></p>
+</div>
+<div id="the-data" class="section level3">
+<h3>The Data</h3>
+<p>I <a href="https://github.com/ryantimpe/GoldenGirls/blob/master/data/Scrape_Transcripts.R">scraped</a> the transcripts of all 169 Golden Girls episodes from <a href="https://www.springfieldspringfield.co.uk/episode_scripts.php?tv-show=the-golden-girls-1985">Springfield! Springfield!</a> using <a href="https://github.com/hadley/rvest">rvest</a>. This source contains every spoken word in each episode. However, these transcripts are missing stage directions and the names of the people speaking each line. This missing data makes analyzing the text and searching for rule triggers a bit more challenging.</p>
+</div>
+<div id="the-game" class="section level3">
+<h3>The Game</h3>
+<div id="cheesecake-trigger" class="section level4">
+<h4>Cheesecake trigger</h4>
+<p>Without stage directions in the scripts, I can’t directly see if the women are eating cheesecake. Instead, I infer a lower-bound estimate using the dialogue. To do this I use two rules: (1) if the women are talking about cheesecake, they are eating it and (2) if they mention cheesecake again within 20 lines of dialogue, they are still eating that same cheesecake.</p>
+<p><img src="/post/2018-02-05-GG-DrinkingGame_files/figure-html/cheesecake_table-1.png" width="864" /></p>
+<p>With this chart<a href="#fn2" class="footnoteRef" id="fnref2"><sup>2</sup></a>, I’ve already run into a problem. In my <em>extensive research</em>, I came across a piece of trivia claiming over 100 cheesecakes were eaten over the course of the series.<a href="#fn3" class="footnoteRef" id="fnref3"><sup>3</sup></a> Searching the transcipts, I only count 32 cheesecakes. I tried to relax the text parsing to include any mention of the word “cake”, but after reviewing the output, these references include exclusively non-cheesecakes.<a href="#fn4" class="footnoteRef" id="fnref4"><sup>4</sup></a> For now, I assume the missing cheesecakes are uniformly distributed across the seasons and will not affect the results.<a href="#fn5" class="footnoteRef" id="fnref5"><sup>5</sup></a></p>
+</div>
+<div id="the-golden-girls" class="section level4">
+<h4>The Golden Girls</h4>
+<p>Calculating the drink triggers for each of the remaining rules follows a similar methodology, with just a few changes, explained below.</p>
+<div id="rose-st.olaf" class="section level5">
+<h5>Rose &amp; St. Olaf</h5>
+<p>For Rose’s stories about St. Olaf, I use the same strategy as the cheesecake trigger. If St. Olaf is referenced in the transcript, I assume Rose is involved in the story. Mentions of St. Olaf within 20 lines of each other are the same story and won’t be counted.</p>
+<p>St. Olaf was not a huge part of Rose’s character until the middle seasons.<a href="#fn6" class="footnoteRef" id="fnref6"><sup>6</sup></a> Her first long (&gt;10 lines) story about St. Olaf was in episode 4 of season 2.</p>
+</div>
+<div id="blanche-the-s-wordsword" class="section level5">
+<h5>Blanche &amp; the S* word<a href="#fn7" class="footnoteRef" id="fnref7"><sup>7</sup></a></h5>
+<p>The 80’s were a different time and, well… the Golden Girls really like to refer to each other (but mostly Blanche) as sluts. In fact, the word “slut” is spoken 54 times throughout the series, which is <strong>exactly</strong> the same number of times as “cheesecake”. That’s… ridiculous.<a href="#fn8" class="footnoteRef" id="fnref8"><sup>8</sup></a></p>
+<p><img src="/post/2018-02-05-GG-DrinkingGame_files/figure-html/slut_cheesecake-1.png" width="864" /></p>
+<p>In the spirit of equal opportunity, the rule in this game is to count drinks when <em>anyone</em> is called a slut.</p>
+</div>
+<div id="sophia-picture-it-sicily" class="section level5">
+<h5>Sophia &amp; Picture It: Sicily…</h5>
+<p>To find instances of Sophia beginning a story with “Picture it”, I split the transcripts into bigrams (pairs of words) rather than words, and then apply a filter for all instances of “picture it.”</p>
+<p>Sophia’s most common use of the phrase is to begin her stories about Sicily. Looking at the trigrams of the text, she also uses it for Brooklyn, Germany, Morocco, and Miami.</p>
+</div>
+<div id="dorothy-stanley" class="section level5">
+<h5>Dorothy &amp; Stanley</h5>
+<p>The original rule for Dorothy was to drink each time Dorothy refers to Sophia as “Ma”. Exploratory data analysis shows that this happens 1906 distinct times over the course of the series and all game players would pass out from drink consumption within 20 minutes.<a href="#fn9" class="footnoteRef" id="fnref9"><sup>9</sup></a></p>
+<p>Throughout the series, Dorothy is hung up on her sleazy ex-husband, Stan. An alternative rule I found is to drink whenever Dorothy exclaims “38 years” - the length of her marriage - or she uses the phrase “It’s me, Stan.”</p>
+</div>
+<div id="combining-the-rules" class="section level5">
+<h5>Combining the rules</h5>
+<p><img src="/post/2018-02-05-GG-DrinkingGame_files/figure-html/other_girls_table-1.png" width="864" /></p>
+<p>Putting it all together, mentions of St. Olaf drive the drink consumption in this game. There are alternative rules for the Golden Girls drinking game where each player chooses a character and only drinks when that character’s rule is triggered. In those cases… pick Rose.</p>
+</div>
+</div>
+</div>
+<div id="the-results" class="section level3">
+<h3>The Results</h3>
+<p>You and your closest friends get together on a Saturday night to play the Golden Girls drinking game and need to pick a season to maximize consumption.</p>
+<p>By choosing season 5, you will consume the most beverages over the course of the evening. Is this the most efficient solution?</p>
+<p><img src="/post/2018-02-05-GG-DrinkingGame_files/figure-html/result_table-1.png" width="864" /></p>
+</div>
+<div id="minute-by-minute-gameplay" class="section level3">
+<h3>Minute-by-minute gameplay</h3>
+<p>Watching an entire season (9+ hours) of a show is quite the commitment<a href="#fn10" class="footnoteRef" id="fnref10"><sup>10</sup></a> for a drinking game. Which season should you watch in order to consume drinks in the <strong>shortest time</strong>?</p>
+<p>I start by converting the episodes in each season to a running tally of time. Each half-hour episode is approximately 22-minutes long, though 11 of the episodes were hour-long (44 minutes)<a href="#fn11" class="footnoteRef" id="fnref11"><sup>11</sup></a>. With that, I calculate the time of each trigger for each season.</p>
+<p><img src="/post/2018-02-05-GG-DrinkingGame_files/figure-html/timeline-1.png" width="864" /></p>
+<p>Season 5 is the way to go for steady drink consumption all night long. If you’re playing the Golden Girls drinking game with speed in mind, perhaps seasons 4 or 6 are the more logical choices - it will take 5 hours of watching season 5 before the drink count exceeds seasons 4 or 6.</p>
+<p>With seasons 4 and 6, you get an hour at a relaxed pace before consuming up to 20 drinks in 20 minutes.</p>
+<p><em>Update: An earlier version of this chart did not have the repeated references to cheesecake or St. Olaf filtered out.</em></p>
+<p><img src="/post/2018-02-05-GG-DrinkingGame_files/figure-html/timeline2-1.png" width="864" /></p>
+<p>The ramps in seasons 4 and 6 are both caused by Rose’s St. Olaf story lines, with a few Dorothy triggers during the season 6 ramp. Again, if you play the alternative rules and need to pick a character, <em>choose Rose</em>.</p>
+</div>
+<div id="conclusion" class="section level3">
+<h3>Conclusion</h3>
+<p>Let’s be honest - any game that requires watching The Golden Girls is a game worth playing, regardless of how many drinks you have. But I set out to answer a question: which season (reasonably) maximizes drink consumption? Seasons 4, 5, or 6 are the way to go.</p>
+<hr />
+<p><em>Script and data can be found <a href="https://github.com/ryantimpe/GoldenGirls">on GitHub</a>.</em></p>
+</div>
+<div class="footnotes">
+<hr />
+<ol>
+<li id="fn1"><p><img src="/img/malcolm.gif" title="fig:" alt="Ian Malcolm" id="id" class="class" width="300" /><a href="#fnref1">↩</a></p></li>
+<li id="fn2"><p>Have you noticed the unconventional (bright and tan) plot colors? This is my attempt at a Golden Girls (wicker furniture in Miami) theme in ggplot using <a href="https://www.shanelynn.ie/themes-and-colours-for-r-ggplots-with-ggthemr/">ggthemr</a>. 💃🏿<a href="#fnref2">↩</a></p></li>
+<li id="fn3"><p>I’m seeing this quoted by <em>super credible</em> sources including <a href="http://www.foxnews.com/entertainment/2017/01/17/10-things-never-knew-about-golden-girls.html">Fox News</a>, <a href="https://www.huffingtonpost.com/2015/09/14/the-golden-girls-_n_5512554.html">Huffington Post</a>, and <a href="http://mentalfloss.com/article/58118/7-times-golden-girls-talked-it-out-over-cheesecake">Mental Floss</a>. The closest I can find to a primary source is the <a href="http://www.imdb.com/title/tt0088526/trivia">IMDB trivia</a> page. 🤷‍♀️<a href="#fnref3">↩</a></p></li>
+<li id="fn4"><p>The Golden Girls enjoyed their desserts! In addition to cheesecake, they discussed wedding cake, marbled cake, chocolate cake, rum cake, birthday cake, St. Olaf friendship cake, sponge cake, Bundt cake, cupcakes, fruitcake, hotcakes, and pancakes. They also once had crab cakes. 🍰<a href="#fnref4">↩</a></p></li>
+<li id="fn5"><p>This analysis will result in a handful of errors - Type I (the women discussing cheesecake they are not eating) and Type II (the women eating a cheesecake and not talking about it). My hope is that the counting errors made by inebriated game players will overshadow these methodological errors. (Type 🍷 error)<a href="#fnref5">↩</a></p></li>
+<li id="fn6"><p>In episode 8 of season 1, Rose mentions being from a place called “Little Falls”.<a href="#fnref6">↩</a></p></li>
+<li id="fn7"><p>Never thought I’d use this word so many times (or at all) in a data analysis. I’m not 100% comfortable with it, but in the interest of a fair literary analysis, here we are. 🙏🏼<a href="#fnref7">↩</a></p></li>
+<li id="fn8"><p>Fun fact: There’s a -0.92 correlation between the frequency of the word “cheesecake” and “slut” in a given season. 💹<a href="#fnref8">↩</a></p></li>
+<li id="fn9"><p>Citation needed. 🤷🏾‍♂️<a href="#fnref9">↩</a></p></li>
+<li id="fn10"><p>Totally worth it. 💯<a href="#fnref10">↩</a></p></li>
+<li id="fn11"><p>Without an explicit list of the longer episodes, I assign the the 11 episodes with the most lines in the transcript as the hour-long ones. ⏳<a href="#fnref11">↩</a></p></li>
+</ol>
+</div>

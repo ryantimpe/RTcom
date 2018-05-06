@@ -1,0 +1,171 @@
+---
+title: 'LEGO mosaics: Two weeks later'
+author: Ryan Timpe
+date: '2018-05-07'
+slug: LEGO-mosaic2
+categories:
+  - LEGO
+  - Data Viz
+tags:
+  - Golden Girls
+  - R
+summary: 'Updates and improvements to the tidyverse LEGO mosaic functions.'
+header: 
+  image: "posts/LEGOMosaicGG2.jpg"
+---
+
+
+
+<div id="introduction" class="section level3">
+<h3>Introduction</h3>
+<p>My previous post on <a href="../../../../2018/04/23/lego-mosaic1/">building LEGO mosaics using R</a> went viral with literally tens of people viewing the page, starring the <a href="https://github.com/ryantimpe/LEGOMosaics">GitHub</a> repo<a href="#fn1" class="footnoteRef" id="fnref1"><sup>1</sup></a>, or sharing their <a href="https://twitter.com/RaoOfPhysics/status/991724781560107019">own creations</a> on Twitter. <a href="https://twitter.com/revodavid">David Smith</a> from Microsoft’s Revolutions blog even <a href="http://blog.revolutionanalytics.com/2018/04/lego-sculpture.html">wrote a post</a> about it.</p>
+<p>In response, I’ve received a few emails and suggestions for improvements, so I’ve updated the functions in the repository with some new features.</p>
+</div>
+<div id="rectangular-mosaics" class="section level3">
+<h3>Rectangular mosaics</h3>
+<p>My original goal was to build mosaics that would fit on the standard 48-stud square base plate. Most of the user examples I have seen have used larger dimensions, so I’ve relaxed the square restriction in the <code>scale_image()</code> function.</p>
+<p>You can now pass an array of two values to this function, the first value specifying the brick-width of the desired mosaic and the second value specifying the height.</p>
+<pre class="r"><code>readJPEG(&quot;LEGOMosaic/goldengirlsW.jpg&quot;) %&gt;% 
+  scale_image(c(72, 48)) %&gt;% #Single value for square, c(W, H) for rectangle
+  legoize() %&gt;% 
+  collect_bricks() %&gt;% 
+  display_set()</code></pre>
+<p><img src="/post/2018-05-07-LEGO-Mosaic2_files/figure-html/rect_show-1.png" width="576" /></p>
+</div>
+<div id="stacked-mosaics" class="section level3">
+<h3>Stacked mosaics</h3>
+<p>The default mosaics are designed to be built by placing a single layer of LEGO plates on a base plate, stud-side up. I received an email from someone who wanted a mosaic that could be built upwards, so the side of the bricks create the image.</p>
+<p>This was actually a pretty simple fix. Using <code>%&gt;% collect_bricks(&quot;stacked&quot;)</code> narrows the brick search to just 2x1, 2x2, 2x3, and 2x4 bricks placed horizontally and staggers them - just like laying actual bricks. The charting functions then render the images with a resolution reflecting the proportions of the side of a brick.<a href="#fn2" class="footnoteRef" id="fnref2"><sup>2</sup></a></p>
+<pre class="r"><code>LEGOmosaic &lt;- readJPEG(&quot;LEGOMosaic/goldengirls2.jpg&quot;) %&gt;% 
+  scale_image(c(72, 48)) %&gt;% 
+  legoize() %&gt;% 
+  collect_bricks(&quot;stacked&quot;) 
+
+LEGOmosaic %&gt;% display_set()</code></pre>
+<p><img src="/post/2018-05-07-LEGO-Mosaic2_files/figure-html/stacked_show-1.png" width="576" /></p>
+</div>
+<div id="piece-list" class="section level3">
+<h3>Piece list</h3>
+<p>I’ve added two new functions to make it easier figure out which LEGO bricks or plates you will need to build the mosaics. The function <code>table_pieces()</code> produces a tibble of required pieces for easy printing.</p>
+<pre class="r"><code>LEGOmosaic %&gt;% table_pieces() %&gt;% head() %&gt;% knitr::kable()</code></pre>
+<table>
+<thead>
+<tr class="header">
+<th align="left">LEGO Brick Color</th>
+<th align="right">1 x 2</th>
+<th align="right">2 x 2</th>
+<th align="right">3 x 2</th>
+<th align="right">4 x 2</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td align="left">Aqua</td>
+<td align="right">28</td>
+<td align="right">5</td>
+<td align="right">0</td>
+<td align="right">0</td>
+</tr>
+<tr class="even">
+<td align="left">Black</td>
+<td align="right">4</td>
+<td align="right">0</td>
+<td align="right">0</td>
+<td align="right">0</td>
+</tr>
+<tr class="odd">
+<td align="left">Brick yellow</td>
+<td align="right">104</td>
+<td align="right">14</td>
+<td align="right">5</td>
+<td align="right">3</td>
+</tr>
+<tr class="even">
+<td align="left">Bright blue</td>
+<td align="right">28</td>
+<td align="right">17</td>
+<td align="right">23</td>
+<td align="right">16</td>
+</tr>
+<tr class="odd">
+<td align="left">Bright orange</td>
+<td align="right">5</td>
+<td align="right">2</td>
+<td align="right">0</td>
+<td align="right">0</td>
+</tr>
+<tr class="even">
+<td align="left">Bright purple</td>
+<td align="right">30</td>
+<td align="right">22</td>
+<td align="right">25</td>
+<td align="right">32</td>
+</tr>
+</tbody>
+</table>
+<p>A more fun, graphical alternative is to use <code>display_pieces()</code>. This image renders slightly differently between stacked and flat mosaics.</p>
+<pre class="r"><code>LEGOmosaic %&gt;% display_pieces()</code></pre>
+<p><img src="/post/2018-05-07-LEGO-Mosaic2_files/figure-html/pieces-1.png" width="768" /></p>
+<p>On the LEGO <a href="https://shop.lego.com/en-US/Pick-a-Brick">Pick-a-Brick</a> page, you can use the Advanced Search section to filter by each color and select the number of pieces you need.</p>
+</div>
+<div id="the-boring-parts" class="section level3">
+<h3>The boring parts</h3>
+<p>I’ve made a few behind-the-scenes edits for those who use intermediate function output. Each function now returns a list object rather than a data frame. This allows the functions to pass metadata (like the stacked vs flat specification) to other functions.</p>
+<pre class="r"><code>LEGOmosaic %&gt;% summary() %&gt;% knitr::kable()</code></pre>
+<table>
+<thead>
+<tr class="header">
+<th></th>
+<th align="left">Length</th>
+<th align="left">Class</th>
+<th align="left">Mode</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td>Img_scaled</td>
+<td align="left">6</td>
+<td align="left">tbl_df</td>
+<td align="left">list</td>
+</tr>
+<tr class="even">
+<td>Img_lego</td>
+<td align="left">8</td>
+<td align="left">tbl_df</td>
+<td align="left">list</td>
+</tr>
+<tr class="odd">
+<td>Img_bricks</td>
+<td align="left">8</td>
+<td align="left">tbl_df</td>
+<td align="left">list</td>
+</tr>
+<tr class="even">
+<td>mosaic_type</td>
+<td align="left">1</td>
+<td align="left">-none-</td>
+<td align="left">character</td>
+</tr>
+<tr class="odd">
+<td>pieces</td>
+<td align="left">4</td>
+<td align="left">tbl_df</td>
+<td align="left">list</td>
+</tr>
+</tbody>
+</table>
+<p>The <code>generate_instructions()</code> function now returns a graphic rather than a data frame, no longer requiring the user to plot them manually.</p>
+</div>
+<div id="conclusion" class="section level3">
+<h3>Conclusion</h3>
+<p>These updates to the functions should make the process of creating a LEGO mosaics a bit easier and more accessible. Next time around, I’ll build a package.</p>
+<hr />
+<p><em>Try it out! Full script can be found on <a href="https://github.com/ryantimpe/LEGOMosaics">GitHub</a>!</em></p>
+</div>
+<div class="footnotes">
+<hr />
+<ol>
+<li id="fn1"><p>Now with a proper README.md file! 🆗<a href="#fnref1">↩</a></p></li>
+<li id="fn2"><p>A 1-unit LEGO brick is <a href="https://bricks.stackexchange.com/questions/288/what-are-the-dimensions-of-a-lego-brick/295">not a square</a>, but is taller than it is wide by a ratio of 6/5.<a href="#fnref2">↩</a></p></li>
+</ol>
+</div>

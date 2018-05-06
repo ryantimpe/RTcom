@@ -1,0 +1,363 @@
+---
+title: 'Data of the Age of Reptiles: Part 3 - Undercoat'
+author: Ryan Timpe
+date: '2018-01-02'
+slug: AOR-undercoat1
+categories:
+  - Dinosaurs
+  - Data Viz
+tags:
+  - Age of Reptiles
+  - R
+summary: "Reconstructing the black and white undercoat of the Age of Reptiles mural."
+header: 
+  image: "posts/AgeOfReptilesBW.jpg"
+  caption: "[**Yale Peabody Museum**](http://peabody.yale.edu/exhibits/age-reptiles-mural)"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, warning = FALSE, message = FALSE)
+
+library(tidyverse) 
+
+aor.raw2 <- readRDS("DotAoR/AoR_DF.rds")
+timeline.period <- readRDS("DotAoR/timeline.rds")
+
+aor <- aor.raw2 %>% 
+  mutate(value_hex = as.character(as.hexmode(round(value*255)))) %>% 
+  mutate(value_hex = ifelse(nchar(value_hex) == 1, paste0("0", value_hex), value_hex)) %>% 
+  select(-value) %>% 
+  spread(channel, value_hex) %>% 
+  mutate(color = toupper(paste0("#", R, G, B)))
+
+```
+
+*Work in Progress*  
+
+### The Undercoat
+
+Before Rudolph Zallinger painted the mural as we see it today, he painted the entire mural in "deliberately overmodeled" forms in black and white. This first coat is visible under the final colored mural, with the dark forms providing a three-dimensional effect.
+
+Am I able to reconstruct this original undermodel using this low-resolution jpeg?
+
+### Reconstructing the undercoat
+
+The best image of the original undercoat I have found is a portrait of Zallinger from 1944 where he is in the process of painting the shadowy undercoat. In the photo, the painting is visible starting at the Jurassic period with details extending through the Permian. For this analysis, I began with just the Jurassic and Triassic period for easy comparison.
+
+![Zallinger & the Age of Reptiles undercoat, 1944 [Yale Peabody Museum](http://peabody.yale.edu/)](../../../../post/DotAoR/AoRUndercoat2.jpg)
+
+### Grayscale
+
+My first instinct to recreate the black and white undercoat was to convert the image to grayscale by assigning every color a darkness value between 0 and 1. 
+
+```{r grayscale, echo = FALSE, fig.height=5, fig.width=10}
+chart.period <- timeline.period %>% 
+  select(label = period, value = x_ef_median) %>% 
+  bind_rows(timeline.period %>% 
+              select(label = earliest, value = x_ef_earliest) %>% 
+              mutate(label = as.character(label))) %>% 
+  arrange(value) %>% 
+  mutate(label = ifelse(label == "Carboniferous /\n Devonian", "Devonian /\n Carboniferous", label))
+
+aor.shd.1 <- aor.raw2 %>% 
+  spread(channel, value) %>% 
+  mutate(y = max(y) - y) %>% 
+  mutate(year = (362-65)/(max(x))*x + 65) %>% 
+  #TIme period, as painted
+  mutate(period = case_when(
+    year <= timeline.period$ef_earliest[1] ~ timeline.period$period[1],
+    year <= timeline.period$ef_earliest[2] ~ timeline.period$period[2], 
+    year <= timeline.period$ef_earliest[3] ~ timeline.period$period[3], 
+    year <= timeline.period$ef_earliest[4] ~ timeline.period$period[4], 
+    TRUE ~ timeline.period$period[5]
+  ))
+
+chart.shd <- aor.shd.1 %>% 
+  filter(period %in% c("Jurassic", "Triassic")) %>% 
+  mutate(total = R+G+B) %>% 
+  mutate(shadow = 1- (total / max(total)))
+
+ggplot(aes(x=x, y=y), 
+       data = chart.shd) +
+  geom_tile(aes(alpha = shadow), fill = "#000000") +
+  scale_fill_identity() +
+  scale_x_continuous(breaks = c(0, chart.period$value[2:6]),
+                     labels = c(65, chart.period$label[2:6]),
+                     expand = c(0.005, 0.005),
+                     name = "Million years ago") +
+  scale_y_continuous(expand = c(0, 0)) +
+  geom_vline(data = timeline.period[2, ], aes(xintercept = x_ef_earliest),
+             color="#00436b", alpha = 0.8, size=1.5) +
+  labs(title = "Grayscale", 
+       subtitle = "The Age of Reptiles | Rudolph Zallinger",
+       caption = "Yale Peabody Museum | Ryan Timpe"
+  ) +
+  coord_fixed() +
+  theme_bw() +
+  theme( 
+    legend.position = "none",
+    axis.text.y = element_blank(),
+    axis.ticks.y = element_blank(),
+    axis.title.y = element_blank(),
+    axis.line.y = element_blank(),
+    axis.text.x = element_text(size = 11),
+    panel.background=element_blank(),panel.border=element_blank(),
+    panel.grid.major=element_blank(),
+    panel.grid.minor=element_blank(),plot.background=element_blank(),
+    strip.background = element_rect(fill = "#00436b"),
+    strip.text = element_text(color = "white", face = "bold", size = 12),
+    plot.title = element_text(color = "#00436b", face = "bold", size = 16),
+    plot.subtitle = element_text(color = "#00436b", size = 14),
+    plot.caption = element_text(size = 11)
+  )
+
+```
+
+With a visual comparison of this image and the photo of the undercoat, it's clear that this is not a good approach. The skies in particular stand out to me - in the final mural, the skies are the lightest areas in the final painting, but in the undercoat the upper portion of them is almost black. In contrast, the Allosaurus and Stegosaurus have white bodies in the undercoat and are rich dark colors in the final mural.
+
+### Shading by intensity
+
+The undercoat layer provides the final painting with shadows for each element of the painting (animals, plants, terrain, sky, etc.). In order to recreate this layer, I need to differentiate between the elements in the painting. One way to do this is to split the painting by shades, and then run similar analyses independently on each one.
+
+```{r shade_groups, echo = FALSE, fig.height=8, fig.width=10}
+chart.shd2 <- chart.shd %>% 
+  mutate(shadow = shadow ^(2),
+         Version = "  Shadow ^2") %>% 
+  mutate(shadow = shadow / max(shadow)) %>% 
+  mutate(shadow_reg = floor(shadow*5)+1) %>% 
+  mutate(shadow_reg = ifelse(shadow_reg >= 4, "4-5", as.character(shadow_reg)))
+
+ggplot(aes(x=x, y=y), 
+       data = chart.shd2) +
+  geom_tile(aes(alpha = shadow), fill = "#000000") +
+  scale_fill_identity() +
+  scale_x_continuous(breaks = c(0, chart.period$value[2:6]),
+                     labels = c(65, chart.period$label[2:6]),
+                     expand = c(0.005, 0.005),
+                     name = "Million years ago") +
+  scale_y_continuous(expand = c(0, 0)) +
+  geom_vline(data = timeline.period[2, ], aes(xintercept = x_ef_earliest),
+             color="#00436b", alpha = 0.8, size=1.5) +
+  labs(title = "Shading by intensity groups", 
+       subtitle = "The Age of Reptiles | Rudolph Zallinger",
+       caption = "Yale Peabody Museum | Ryan Timpe"
+  ) +
+  coord_fixed() +
+  facet_grid(shadow_reg ~ . ) +
+  theme_bw() +
+  theme( 
+    legend.position = "none",
+    axis.text.y = element_blank(),
+    axis.ticks.y = element_blank(),
+    axis.title.y = element_blank(),
+    axis.line.y = element_blank(),
+    axis.text.x = element_text(size = 11),
+    panel.background=element_blank(),panel.border=element_blank(),
+    panel.grid.major=element_blank(),
+    panel.grid.minor=element_blank(),plot.background=element_blank(),
+    strip.background = element_rect(fill = "#00436b"),
+    strip.text = element_text(color = "white", face = "bold", size = 12),
+    plot.title = element_text(color = "#00436b", face = "bold", size = 16),
+    plot.subtitle = element_text(color = "#00436b", size = 14),
+    plot.caption = element_text(size = 11)
+  )
+
+```
+
+To get the groups, I square the grayscale values for each cells in order to further differentiate them, then allocate each shading intensity value into quintiles.
+
+The lightest group contains mostly the skies while the darkest groups **almost** resemble the fauna in the undercoat. However, after a lot of trial and error, I was unable to come close to reconstructing the undercoat with this method.
+
+### Shading by color
+
+Each object in the final mural was represented in the undercoat. I can't (yet) easily split the mural into individual objects, however, for the most part, Zallinger used the undercoat to create various shades of the same color to paint each object. By splitting the mural into color types, I could come closer to recreating the undercoat.
+
+After a lot of tweaking values and filtering steps, I came close to recreating the undercoat.
+
+* I rounded each RGB channel into groups of the nearest 5% intensity.
+* I turned these RGB channel values into color groups, determined by the *relative intensity* of R, G, B.
+     + How much *more* red than green is a pixel, *more* green than blue, and *more* red than blue.
+     + This grouping is important because a pixel with 100% each RGB is the same (but brighter) color as a pixel with 80% RGB.
+     + This created 88 unique color groups (not 20\*20\*20 = 8,000 because not all colors are in the painting.) Only 50 of these color groups are represented in more than 100 pixels.
+* To ensure completely different colors are not grouped together (e.g. black and white), I further divided the color groups into 3 shadow groups: >90% brightness, 50-90%, and <50%.
+* For each color \* shadow group, only the pixels with a shadow value of at least 150% the minimum value are retained.
+
+```{r undercoat_jt, echo = TRUE}
+
+#Number of groups per RGB channel
+color_group_n <- 20
+
+chart.uc <- aor.shd.1 %>% 
+  mutate(Ru = R, Gu = G, Bu = B) %>% 
+  mutate_at(vars(Ru, Gu, Bu), funs(
+    ifelse(. == 1, color_group_n-1, round(.*color_group_n))
+  )) %>% 
+  mutate(
+    del_RG = Ru - Gu,
+    del_RB = Ru - Bu,
+    del_GB = Gu - Bu
+  ) %>% 
+  mutate(
+    color_group = paste(del_RG, del_RB, del_GB)
+  ) %>% 
+  select(-dplyr::starts_with("del_")) %>% 
+  mutate(shadow = ((1-R)+(1-G)+(1-B))/3) %>% 
+  mutate(shadow_group = case_when(
+    shadow < 0.2 ~ "Light",
+    shadow < 0.5 ~ "Medium",
+    TRUE ~ "Dark"
+  )) %>% 
+  group_by(color_group, shadow_group, period) %>% 
+  mutate(under = shadow > min(shadow)*1.5) %>% 
+  ungroup() %>% 
+  mutate_at(vars(R, G, B), funs(as.character(as.hexmode(.*255)))) %>% 
+  mutate_at(vars(R, G, B), funs(ifelse(nchar(.) == 1, paste0("0", .), .))) %>% 
+  mutate(color = toupper(paste0("#", R, G, B)))
+
+```
+
+```{r undercoat_jt_chart, echo = FALSE, fig.height=5, fig.width=10}
+
+
+chart.period.jt <- chart.period[2:6, ]
+timeline.period.jt <- timeline.period[2, ]
+
+ggplot(aes(x=x, y=y), 
+       data = chart.uc %>% filter(under, period %in% c("Jurassic", "Triassic"))) +
+  geom_tile(aes(fill = "black", alpha = shadow^.75)) +
+  scale_fill_identity() +
+  scale_alpha_identity() +
+  scale_x_continuous(#limits = c(0, 1250),
+    breaks = c(0, chart.period.jt$value),
+    labels = c(65, chart.period.jt$label),
+    expand = c(0.005, 0.005),
+    name = "Million years ago") +
+  scale_y_continuous(expand = c(0, 0)) +
+  geom_vline(data = timeline.period.jt, aes(xintercept = x_ef_earliest),
+             color="#00436b", alpha = 0.8, size=1.5) +
+  labs(title = "Reconstructed underpainting - Jurassic & Triassic", 
+       subtitle = "The Age of Reptiles | Rudolph Zallinger",
+       caption = "Yale Peabody Museum | Ryan Timpe"
+  ) +
+  coord_fixed() +
+  theme_bw() +
+  theme( 
+    axis.text.y = element_blank(),
+    axis.ticks.y = element_blank(),
+    axis.title.y = element_blank(),
+    axis.line.y = element_blank(),
+    axis.text.x = element_text(size = 11),
+    panel.background=element_blank(),panel.border=element_blank(),
+    panel.grid.major=element_blank(),
+    panel.grid.minor=element_blank(),plot.background=element_blank(),
+    strip.background = element_rect(fill = "#00436b"),
+    strip.text = element_text(color = "white", face = "bold", size = 12),
+    plot.title = element_text(color = "#00436b", face = "bold", size = 16),
+    plot.subtitle = element_text(color = "#00436b", size = 14),
+    plot.caption = element_text(size = 11)
+  )
+
+```
+
+These assumptions provide a rough approximation of the original undercoat. The skies are dark with bright, shadowy clouds. The bodies of all the dinosaurs are visible and the shadowing on Stegosaurus and Allosaurus closely resembles the image of the actual undercoat. The Brontosaurus neck is a bit dark, but for the most part matches the image except for the highlights.
+
+This analysis also makes the low resolution of the image I'm using for analysis more apparent.
+
+Applying these assumptions to the entire mural yields the image below.
+
+```{r undercoat_chart, echo = FALSE, fig.height=3, fig.width=10}
+
+ggplot(aes(x=x, y=y), 
+       data = chart.uc %>% filter(under)) +
+  geom_tile(aes(fill = "black", alpha = shadow^.75)) +
+  scale_fill_identity() +
+  scale_alpha_identity() +
+  scale_x_continuous(
+    limits = c(0, 1250),
+    breaks = c(0, chart.period$value),
+    labels = c(65, chart.period$label),
+    expand = c(0.005, 0.005),
+    name = "Million years ago") +
+  scale_y_continuous(expand = c(0, 0)) +
+  geom_vline(data = timeline.period[1:4, ], aes(xintercept = x_ef_earliest),
+             color="#00436b", alpha = 0.8, size=1.5) +
+  labs(title = "Reconstructed underpainting", 
+       subtitle = "The Age of Reptiles | Rudolph Zallinger",
+       caption = "Yale Peabody Museum | Ryan Timpe"
+  ) +
+  coord_fixed() +
+  theme_bw() +
+  theme( 
+    axis.text.y = element_blank(),
+    axis.ticks.y = element_blank(),
+    axis.title.y = element_blank(),
+    axis.line.y = element_blank(),
+    axis.text.x = element_text(size = 11),
+    panel.background=element_blank(),panel.border=element_blank(),
+    panel.grid.major=element_blank(),
+    panel.grid.minor=element_blank(),plot.background=element_blank(),
+    strip.background = element_rect(fill = "#00436b"),
+    strip.text = element_text(color = "white", face = "bold", size = 12),
+    plot.title = element_text(color = "#00436b", face = "bold", size = 16),
+    plot.subtitle = element_text(color = "#00436b", size = 14),
+    plot.caption = element_text(size = 11)
+  )
+
+```
+
+These assumptions also perform moderately well for the Permian period, with a dark sail and white body for Edaphodaurus. I'm less impressed with the output in the Cretaceous period, but there is no original to compare it to.
+
+### Enhancing the undercoat in the mural
+
+Finally, I wanted to see if increasing the intensity of the undercoat in the original mural would increase the "three-dimensional" effect.
+
+```{r 3d_chart, echo = FALSE, fig.height=3, fig.width=10}
+
+ggplot(aes(x=x, y=y), 
+       data = chart.uc) +
+  geom_tile(aes(fill = ifelse(under, "black", color), 
+                alpha = ifelse(under, shadow, .8))) +
+  scale_fill_identity() +
+  scale_alpha_identity() +
+  scale_x_continuous(
+    limits = c(0, 1250),
+    breaks = c(0, chart.period$value),
+    labels = c(65, chart.period$label),
+    expand = c(0.005, 0.005),
+    name = "Million years ago") +
+  scale_y_continuous(expand = c(0, 0)) +
+  geom_vline(data = timeline.period[1:4, ], aes(xintercept = x_ef_earliest),
+             color="white", alpha = 0.25, size=1.5) +
+  labs(title = "Enhanced undercoat", 
+       subtitle = "The Age of Reptiles | Rudolph Zallinger",
+       caption = "Yale Peabody Museum | Ryan Timpe"
+  ) +
+  coord_fixed() +
+  theme_bw() +
+  theme( 
+    axis.text.y = element_blank(),
+    axis.ticks.y = element_blank(),
+    axis.title.y = element_blank(),
+    axis.line.y = element_blank(),
+    axis.text.x = element_text(size = 11),
+    panel.background=element_blank(),panel.border=element_blank(),
+    panel.grid.major=element_blank(),
+    panel.grid.minor=element_blank(),plot.background=element_blank(),
+    strip.background = element_rect(fill = "#00436b"),
+    strip.text = element_text(color = "white", face = "bold", size = 12),
+    plot.title = element_text(color = "#00436b", face = "bold", size = 16),
+    plot.subtitle = element_text(color = "#00436b", size = 14),
+    plot.caption = element_text(size = 11)
+  )
+
+```
+
+Kinda?
+
+For now, I didn't manage to completely reproduce the high contrast undercoat of the mural. The original image of Zallinger's undercoat is bold and detailed, and this reconstruction looks more like a low quality newspaper print.
+
+***
+
+*This is the third in a series of posts about the Age of Reptiles. [See more here.](../../../../tags/Age-of-Reptiles)*
+
+*These posts are a work in progress and will be edited over time.*

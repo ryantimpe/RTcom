@@ -1,0 +1,167 @@
+---
+title: 'Data of the Age of Reptiles: Part 5 - Geography'
+author: Ryan Timpe
+date: '2018-01-31'
+slug: AOR-geography1
+categories:
+  - Dinosaurs
+  - Data Viz
+tags:
+  - Age of Reptiles
+  - R
+summary: "Where on earth (literally) does the Age of Reptiles mural take place?"
+header: 
+  image: "posts/AgeOfReptilesGeography.jpg"
+  caption: "[**Yale Peabody Museum**](http://peabody.yale.edu/exhibits/age-reptiles-mural)"
+---
+
+
+
+<p><em>Work in Progress</em></p>
+<div id="the-geography" class="section level3">
+<h3>The Geography</h3>
+<p>At first glance, the Age of Reptiles mural depicts North American prehistoric life as it may have lived tens and hundreds of millions of years ago. The mural was commissioned to show the Peabody’s specimens (nearly all of them from North America) as they may have lived and behaved when alive.</p>
+<p>From a purely geographic perspective, is the mural an accurate depiction of prehistoric North America?</p>
+<p>Starting in the Cretaceous end of the painting on the left, the triceratops and tyrannosaur are two of the most classic North American dinosaurs. Continue back in time into the Jurassic and you’ll see <em>the</em> most iconic American dinosaur - the brontosaurus. Flying in front of the large brontosaurus are two archaeopteryx - the most famous feathered dinosaurs from… Europe.</p>
+<p>The mural isn’t a pure depiction of North America.<a href="#fn1" class="footnoteRef" id="fnref1"><sup>1</sup></a> How inaccurate is it? Is archaeopteryx the only distinctively non-North American animal featured?<a href="#fn2" class="footnoteRef" id="fnref2"><sup>2</sup></a></p>
+</div>
+<div id="location-of-fossil-discoveries" class="section level3">
+<h3>Location of fossil discoveries</h3>
+<p>I begin with seeing where, exactly, fossils of these animals have been found. The <a href="https://paleobiodb.org/#/">Paleobiology Database</a> contains open-source data on the locations and geological conditions of many fossils. Using the API, I wrote <a href="https://github.com/ryantimpe/AgeOfReptiles/blob/master/0_PaleobioDB.R">script</a> to download all specimens for each animal represented in the mural.</p>
+<p>It turns out that fossils for most of the animals depicted in the mural have actually been found in North America. For many genera, fossils have been found all over the world.</p>
+<div id="age-of-reptiles-genera-by-region" class="section level4">
+<h4>Age of Reptiles genera by region</h4>
+<table>
+<thead>
+<tr class="header">
+<th align="left">Region</th>
+<th align="right">Genera Found</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td align="left">North America</td>
+<td align="right">25</td>
+</tr>
+<tr class="even">
+<td align="left">Europe</td>
+<td align="right">20</td>
+</tr>
+<tr class="odd">
+<td align="left">Africa</td>
+<td align="right">5</td>
+</tr>
+<tr class="even">
+<td align="left">Asia</td>
+<td align="right">5</td>
+</tr>
+<tr class="odd">
+<td align="left">South America</td>
+<td align="right">3</td>
+</tr>
+</tbody>
+</table>
+<p>However, fossils for 6 animals depicted in the mural have never been found in North America. Below is a list of these animals, along with the countries where they have been found and the number of specimens discovered. Interestingly, both of the flying Jurassic animals in the mural, archaeopteryx and rhamphorhynchus, belong to this list.</p>
+</div>
+<div id="age-of-reptiles-specimens-never-found-in-north-america" class="section level4">
+<h4>Age of Reptiles specimens never found in North America</h4>
+<table>
+<thead>
+<tr class="header">
+<th align="left">Genus</th>
+<th align="right">Specimens</th>
+<th align="left">1</th>
+<th align="left">2</th>
+<th align="left">3</th>
+<th align="left">4</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td align="left">Rhamphorhynchus</td>
+<td align="right">26</td>
+<td align="left">DE (21)</td>
+<td align="left">PT (3)</td>
+<td align="left">TZ (1)</td>
+<td align="left">UK (1)</td>
+</tr>
+<tr class="even">
+<td align="left">Cynognathus</td>
+<td align="right">16</td>
+<td align="left">ZA (11)</td>
+<td align="left">?? (3)</td>
+<td align="left">AA (1)</td>
+<td align="left">AR (1)</td>
+</tr>
+<tr class="odd">
+<td align="left">Archaeopteryx</td>
+<td align="right">8</td>
+<td align="left">DE (7)</td>
+<td align="left">ES (1)</td>
+<td align="left"></td>
+<td align="left"></td>
+</tr>
+<tr class="even">
+<td align="left">Saltoposuchus</td>
+<td align="right">3</td>
+<td align="left">DE (2)</td>
+<td align="left">CH (1)</td>
+<td align="left"></td>
+<td align="left"></td>
+</tr>
+<tr class="odd">
+<td align="left">Diplovertebron</td>
+<td align="right">1</td>
+<td align="left">CZ (1)</td>
+<td align="left"></td>
+<td align="left"></td>
+<td align="left"></td>
+</tr>
+<tr class="even">
+<td align="left">Eusthenopteron</td>
+<td align="right">1</td>
+<td align="left">?? (1)</td>
+<td align="left"></td>
+<td align="left"></td>
+<td align="left"></td>
+</tr>
+</tbody>
+</table>
+</div>
+</div>
+<div id="the-mural" class="section level3">
+<h3>The Mural</h3>
+<p>Where are the outlier animals in the mural? For this, I return to the <a href="../../../../2018/01/03/aor-objects1/">Voronoi diagram</a> from the previous post. The areas in this diagram are rough approximations of key animal, plant, and landscape objects in the painting.</p>
+<p>I’m only interested in the out-of-place animals in the mural, sticking with the assumption that the Age of Reptiles is a mural of North America. If any fossils of a given animal have been found in North America, I allocate that region in the diagram to North America. Otherwise, the Voronoi region is allocated to the continent where fossils have been found. The eusthenopteron fish in the Carboniferous part of the mural did not have a location in the Paleobiology Database, so are categorized as unknown.</p>
+<p><img src="/post/2018-01-11-DotAoR-Geography1_files/figure-html/voronoi-1.png" width="960" /></p>
+</div>
+<div id="on-the-map" class="section level3">
+<h3>On the map</h3>
+<p>In the Voronoi diagram, I layer geography of the animals on top of the mural. Next, I’ll layer the animals from the mural on top of geography.</p>
+<p>I begin with a scatter plot of all of the fossil locations of the animals depicted in the mural. If multiple specimens have been found in the same location, I increase the size of the point.</p>
+<p>Though many fossil specimens have been found in North America, there are many points scattered across the globe, including South America, South Africa, and Europe.</p>
+<p>This could mean that even though I consider the Age of Reptiles mural to be a portrait North American pre-history, perhaps the story it tells is representative of many areas on earth.<a href="#fn3" class="footnoteRef" id="fnref3"><sup>3</sup></a></p>
+<p><img src="/post/2018-01-11-DotAoR-Geography1_files/figure-html/scatter_map-1.png" width="960" /></p>
+<p>On the other extreme, the North American fossils depicted in the Age of Reptiles have nearly all been found in the midwest region<a href="#fn4" class="footnoteRef" id="fnref4"><sup>4</sup></a>; eastern US and the west coast are barely represented. If the Age of Reptiles mural isn’t a universal depiction of prehistoric life, maybe it’s just a depiction of ancient life in the ancient midwest…<a href="#fn5" class="footnoteRef" id="fnref5"><sup>5</sup></a></p>
+<p><img src="/post/2018-01-11-DotAoR-Geography1_files/figure-html/scatter_map_us-1.png" width="960" /></p>
+</div>
+<div id="so-where-does-the-mural-take-place" class="section level3">
+<h3>So… where does the mural take place?</h3>
+<p>Just as Zallinger took liberties with the <a href="../../../../2017/12/20/aor-timeline1/">timeline feature</a> of the Age of Reptiles mural, he took a few liberties with geography as well. A wading brontosaurus probably never witnessed an archaeopteryx mating ritual, but that doesn’t mean great North American sauropods never coexisted with early winged dinosaurs. The scenes depicted in the mural are generic enough that they reflect the science of the 1940s, even if the exact animals are a bit off.</p>
+<hr />
+<p><em>This is the fifth in a series of posts about the Age of Reptiles. <a href="../../../../tags/age-of-reptiles">See more here.</a></em></p>
+<p><em>Script and data can be found <a href="https://github.com/ryantimpe/AgeOfReptiles">on GitHub</a>.</em></p>
+<p><em>These posts are a work in progress and will be edited over time.</em></p>
+</div>
+<div class="footnotes">
+<hr />
+<ol>
+<li id="fn1"><p>The Cretaceous-ending event is depicted as erupting volcanoes in the mural. In addition to the asteroid impact in Mexico, scientist do think massive eruptions played a role in the extinction of the dinosaurs, but those volcanoes were in India, not North America. Zallinger didn’t know this, though.<a href="#fnref1">↩</a></p></li>
+<li id="fn2"><p>There’s one, really big, problem with comparing this mural with modern geographical areas: <a href="https://en.wikipedia.org/wiki/Plate_tectonics">plate tectonics</a>. The continents 330 million years ago during the <a href="http://palaeos.com/paleozoic/carboniferous/images/SerpukhovianMap.jpg">Carboniferous period</a> looked nothing like the those during <a href="https://media1.britannica.com/eb-media/46/136146-004-BF345816.jpg">Triassic Period</a> 100 million years later. The locations of the continents at the end of the <a href="https://media1.britannica.com/eb-media/44/136144-004-76AAB173.jpg">Cretaceous period</a> are similar to the modern earth, except for the high ocean level and that sea splitting North America. (More on that in the future.)</p>
+<p>This makes it more likely that animals from earlier periods, especially before the final break-up of Pangea, could easily migrate between the continents as we know them today. It also means that Carboniferous North America was essentially the same as Carboniferous Siberia and Africa.</p>
+<p>For now, I ignore this problem. Plate tectonics was not a mainstream idea until the lat 1950’s and 60’s, so when he painted the mural, Zallinger likely ignored it, too.<a href="#fnref2">↩</a></p></li>
+<li id="fn3"><p>Asia is not well-represented in this map. Though some of the best recent dinosaur discoveries have been made in China, many of those are new genera and not represented in the Age of Reptiles mural. <a href="https://en.wikipedia.org/wiki/List_of_Australian_and_Antarctic_dinosaurs">Antarctica and Australia</a> too!<a href="#fnref3">↩</a></p></li>
+<li id="fn4"><p>Thanks to the perfect storm of geological events exposing hundred-million year old rock layers. Turns out that mountains are great for this.<a href="#fnref4">↩</a></p></li>
+<li id="fn5"><p><strong>Counterpoint</strong> …If that’s the case, why did Zallinger exclude from the mural the Western Interior Seaway - literally the defining feature of the US midwest during Cretaceous Period?<a href="#fnref5">↩</a></p></li>
+</ol>
+</div>

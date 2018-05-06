@@ -1,0 +1,463 @@
+---
+title: 'Will & Grace - Guest Star Paradox'
+author: Ryan Timpe
+date: '2017-11-05'
+slug: WaG-GuestStars
+categories:
+  - Television
+  - Pop Culture
+  - Data Viz
+tags:
+  - Will & Grace
+  - R
+summary: "Finding impossible guest stars in the television show Will & Grace."
+header: 
+  image: "posts/WaG-Paradox.jpg"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, warning = FALSE, message = FALSE)
+
+library(tidyverse)
+library(tidytext)
+
+
+#Text 
+
+wg_text <- readRDS("Television/WaG/Processed_Transcripts.RDS")
+
+wg_t_n1 <- wg_text %>% 
+  unnest_tokens(ngram, Line, token = "words", drop=F)
+
+wg_t_n2 <- wg_text %>% 
+  unnest_tokens(ngram, Line, token = "ngrams", n=2, drop=F)
+
+wg_t_n3 <- wg_text %>% 
+  unnest_tokens(ngram, Line, token = "ngrams", n=3, drop=F)
+
+#Guest stars
+
+wg_film <- readRDS("Television/WaG/WG_Filmography.rds") 
+
+wg_film2 <- wg_film %>% 
+  mutate_if(is.factor, as.character) %>% 
+  filter(Num_Episodes < 20) %>% 
+  mutate(Actor = gsub("\n", "", Actor, fixed=T),
+         Character = gsub("\n", "", Character, fixed=T))
+  
+wg_f_n1 <- wg_film2 %>% 
+  unnest_tokens(actor, Actor, token = "words", drop = F)  
+
+wg_f_n2 <- wg_film2 %>% 
+  unnest_tokens(actor, Actor, token = "ngrams", n=2, drop=F)
+
+wg_f_n3 <- wg_film2 %>% 
+  unnest_tokens(actor, Actor, token = "ngrams", n=3, drop=F)
+
+#Guest stars who have been references
+
+ref_1 <- wg_t_n1 %>% 
+  rename(actor = ngram) %>% 
+  inner_join(wg_f_n1) %>% 
+  mutate(as_self = (Actor == Character) | grepl("self", Character)) %>% 
+  filter(actor %in% c("madonna", "cher"))
+
+ref_2 <- wg_t_n2 %>% 
+  rename(actor = ngram) %>% 
+  inner_join(wg_f_n2) %>% 
+  mutate(as_self = (Actor == Character) | grepl("self", Character)) %>% 
+  filter(!(actor %in% c("scott kelly", "leslie jordan", "james earl", "earl jones")))
+
+ref_3 <- wg_t_n3 %>% 
+  rename(actor = ngram) %>% 
+  inner_join(wg_f_n3) %>% 
+  mutate(as_self = (Actor == Character) | grepl("self", Character))
+
+# Clean
+
+simpleCap <- function(x) {
+  s <- strsplit(x, " ")[[1]]
+  paste(toupper(substring(s, 1,1)), substring(s, 2),
+        sep="", collapse=" ")
+  }
+
+first_eps <- read.csv("Television/WaG/ActorEpisodes.csv", stringsAsFactors = F)
+
+guest_stars1 <- ref_1 %>% 
+  bind_rows(ref_2) %>% 
+  bind_rows(ref_3) %>% 
+  select(-Actor) %>% #Glitchy... with \n
+  rowwise() %>% 
+  mutate(Actor = simpleCap(actor)) %>% 
+  ungroup() %>% 
+  select(-actor) %>% 
+  group_by(Actor) %>% 
+  mutate(Num_Ref_Eps = length(unique(Episode))) %>% 
+  ungroup() %>% 
+  left_join(first_eps)
+
+# write.csv(guest_stars1 %>% pull(Actor) %>% unique(), file = "data/ActorEpisodes.csv",
+#           row.names=F)
+
+
+
+unique(guest_stars1 %>% filter(!as_self) %>% pull(Actor))
+
+guest_stars2 <- guest_stars1 %>% 
+  select(Actor, Character, 
+         Ref_Eps = Episode, Num_Ref_Eps, 
+         App_Eps = Episode_Apperance, Num_App_Eps = Num_Episodes, 
+         as_self, Year_start) %>% 
+  distinct() %>% 
+  rowwise() %>% 
+  mutate(App_Eps = as.character(App_Eps),
+    App_Eps = ifelse(nchar(App_Eps) == 3, paste0(App_Eps, "0"), App_Eps)) %>% 
+  ungroup()
+
+#####
+# CHART
+#####
+
+chart.height <- 6
+
+eps_list <- tibble(Episode = unique(wg_text$Episode)) %>% 
+  bind_rows(tibble(Episode = "7.11")) %>% 
+  arrange(Episode) %>% 
+  separate(Episode, c("Season", "Episode")) %>% 
+  mutate_all(as.numeric) %>% 
+  mutate(Episode_num = row_number()) %>% 
+  mutate(x_adj = (Episode - 1) %/% chart.height + 1,
+         y = (Episode - 1) %% chart.height + 1) %>% 
+  group_by(Season, x_adj) %>% 
+  mutate(x = ifelse(Episode == first(Episode), 1, 0)) %>% 
+  ungroup() %>% 
+  mutate(x = cumsum(x))
+
+
+guest_stars3 <- guest_stars2 %>% 
+  select(-Year_start) %>% 
+  gather(Episode_Type, Episode, Ref_Eps, App_Eps) %>% 
+  separate(Episode, c("Season", "Episode")) %>% 
+  mutate_at(vars(Season, Episode), as.numeric) %>% 
+  distinct() %>% 
+  #Add in missing cher
+  bind_rows(tibble(
+    Actor = "Cher", Character = "Cher", Num_Ref_Eps = 11, Num_App_Eps = 2,
+    as_self = TRUE, Episode_Type = "App_Eps", Season = 4, Episode = 26
+  )) %>% 
+  arrange(Actor) 
+
+#Chart
+
+x_labels <- eps_list %>% 
+  select(x, y, Season) %>% 
+  group_by(Season) %>% 
+  filter(y == 1, x == first(x)) %>% 
+  mutate(label = paste("Seas", Season))
+
+guest_key <- guest_stars3 %>%
+  filter(Episode_Type == "App_Eps") %>% 
+  select(-Episode_Type) %>% 
+  distinct() %>% 
+  mutate(caption = ifelse(as_self, 
+                          paste(Actor, "appeared in Season", Season, "and was referenced in", 
+                                Num_Ref_Eps, ifelse(Num_Ref_Eps==1, "episode.", "episodes.")),
+                          paste(Actor, "guest starred as", Character, "in Season", Season, 
+                                "but was also named in at least", Num_Ref_Eps, ifelse(Num_Ref_Eps==1, "episode.", "episodes.")))
+         )
+
+```
+
+### Guest Stars in *Will & Grace*
+
+Will & Grace is known for its sharp, current events humor and pop culture name drops. Over the course of its eight (and now nine, ten, ...) seasons, it also hosted [at least 50](http://ew.com/gallery/will-and-grace-guest-stars/the-best-will-and-grace-guest-stars) guest stars, some of whom were also name dropped on the show.
+
+### Which guest stars were also discussed on the show?
+
+My first goal was to find the overlap between celebrities who have appeared in the show and celebrities who have been referenced in the show's dialogue. I began by scraping the [transcripts](https://www.springfieldspringfield.co.uk/episode_scripts.php?tv-show=will-and-grace) from every episode and the list of all [credited actors](http://www.imdb.com/title/tt0157246/fullcredits?ref_=tt_cl_sm#cast) from IMDB.
+
+Using the [tidytext](http://tidytextmining.com/) package in R, I broke every transcript into 1-, 2-, and 3-word ngrams. This assumes every actor goes by 1, 2, or 3 names. Merging this with the list of actor names from IMDB, I get a complete list of actors who have both appeared in the show and have been discussed by the characters.
+
+```{r guest_table, include=FALSE}
+
+guest_table <- guest_key %>% 
+  select(-caption) %>% 
+  filter(!(Actor == "Cher" & Episode == 26)) %>%  #Drop extra Cher
+  arrange(desc(Num_Ref_Eps)) %>% 
+  select(Actor, Character, Self = as_self, `# Eps Referenced` = Num_Ref_Eps)
+
+```
+
+Overall, there are at least `r nrow(guest_table)` guest stars on Will & Grace who were also referenced in the show's dialogue. This estimate is a lower bound, as the analysis won't find celebrites that were mentioned only by first name but are known by their full names (unlike Madonna and Cher). It also did not flag any jokes where the actor made a pun using part of the celebrity's name.
+
+#### Celebrities both guest starred & referenced at least 3 times.
+
+```{r guest_table_show, echo=FALSE}
+
+knitr::kable(filter(guest_table, `# Eps Referenced` >= 3) %>% select(-Self))
+
+```
+
+Of those `r nrow(guest_table)` guest stars, `r nrow(guest_table %>% filter(Self))` appeared as themselves (or as caricatures of themselves). 
+
+### The Guest Star Paradox
+
+What about the other guest stars? These actors were referenced by name in at least one episode, but then appeared in another episode as a character. 
+
+As an example, Madonna is discussed in six different episodes (plus another in Season 9), but she also played Karen's roommate Liz in a Season 5 episode. This creates a minor paradox, as both Madonna and Liz shouldn't exist in the same universe.
+
+```{r chart_madonna, fig.height=3, fig.width=10, echo = FALSE}
+
+sel_actor <- "Madonna"
+
+sel_guest_key <- guest_key %>% 
+  filter(Actor == sel_actor)
+
+sel_guest_key <- sel_guest_key[1,]
+
+chart_guest <- eps_list %>% 
+  left_join(guest_stars3 %>% 
+              filter(Actor == sel_actor)
+            ) %>% 
+  mutate(color = ifelse(Season %% 2 == 0, "#999999", "white")) %>% 
+  mutate(Guest_Type = case_when(
+    Episode_Type == "App_Eps" ~ " Appearance",
+    Episode_Type == "Ref_Eps" ~ " Reference",
+    TRUE ~ "No Reference :("
+  ))
+
+chart_arcs <- chart_guest %>% 
+  filter(!is.na(Actor)) %>% 
+  mutate(Coords = paste0(x, ",", y)) %>% 
+  select(Actor, Character, Coords, Episode_Type) %>% 
+  arrange(Actor) %>% 
+  group_by(Actor, Episode_Type) %>% 
+  mutate(id = row_number()) %>% 
+  ungroup() %>% 
+  spread(Episode_Type, Coords) %>% 
+  #FOr multiple Appearances
+  select(-id) %>% 
+  complete(Actor, Character, App_Eps, Ref_Eps) %>% 
+  #Continue
+  separate(App_Eps, c("x_start", "y_start")) %>% 
+  separate(Ref_Eps, c("x_end", "y_end")) %>% 
+  mutate_at(vars(dplyr::contains("x_"), dplyr::contains("y_")), as.numeric) %>% 
+  filter(!((x_end == x_start) & (y_end == y_start)))
+
+ggplot(chart_guest,
+       aes(x=x, y=y)) +
+  geom_tile(aes(color = color, fill=Guest_Type)) + 
+  scale_fill_manual(values= c(" Reference"="#FF00FF", " Appearance" = "#8A2BE2", "No Reference :("= "#CCCCdd" ) , na.value = "#cccccc") +
+  scale_color_identity() +
+  geom_text(data = x_labels, aes(x = x, y=1, label = label), hjust = 0,
+            color = "#00436b", fontface = "bold", nudge_x = -0.5) + 
+  scale_x_continuous(expand = c(0, 0)) +
+  scale_y_continuous(expand = c(0.16, 0.16), name = "Episode") +
+  geom_curve(data = chart_arcs, 
+           aes(x = x_start, xend = x_end, y = y_start, yend = y_end),
+           curvature = 0.15, size = 1, color = "#00436b") +
+  coord_fixed() +
+  labs(title = paste(sel_actor, "References & Guest Appearances"),
+       subtitle = "Will & Grace, Season 1-8",
+       caption = sel_guest_key$caption[1]) +
+  theme_bw() +
+  theme( 
+    axis.text.y = element_blank(),
+    axis.ticks.y = element_blank(),
+    axis.title.y = element_text(size = 12, face="bold"),
+    axis.line.y = element_blank(),
+    # axis.text.x = element_text(size = 12, face="bold"),
+    axis.text.x =  element_blank(),
+    axis.title.x = element_blank(),
+    axis.ticks = element_blank(),
+    panel.background=element_blank(),panel.border=element_blank(),
+    panel.grid.major=element_blank(),
+    panel.grid.minor=element_blank(),plot.background=element_blank(),
+    strip.background = element_rect(fill = "#00436b"),
+    strip.text = element_text(color = "white", face = "bold", size = 12),
+    plot.title = element_text(color = "#00436b", face = "bold", size = 16),
+    plot.subtitle = element_text(color = "#00436b", size = 14),
+    plot.caption = element_text(size = 11),
+    legend.position = "right"
+  )
+```
+
+In total there are at least `r nrow(guest_table %>% filter(!Self))` of these paradox situations. They are also some of the most notable guest appearances by the most famous guest stars [citation needed]. This is to be expected, as more famous/iconic celebrities are more likely to be mentioned in conversation, while also more likely to have substantial guest starring roles, rather than brief cameos. The entire list is printed at the bottom of this post.
+
+Other notable examples include **Britney Spears**, Rosie O'Donnell, Ellen Degeneres, and Alec Baldwin.
+
+```{r chart_britney, fig.height=3, fig.width=10, echo = FALSE}
+
+sel_actor <- "Britney Spears"
+
+sel_guest_key <- guest_key %>% 
+  filter(Actor == sel_actor)
+
+sel_guest_key <- sel_guest_key[1,]
+
+chart_guest <- eps_list %>% 
+  left_join(guest_stars3 %>% 
+              filter(Actor == sel_actor)
+            ) %>% 
+  mutate(color = ifelse(Season %% 2 == 0, "#999999", "white")) %>% 
+  mutate(Guest_Type = case_when(
+    Episode_Type == "App_Eps" ~ " Appearance",
+    Episode_Type == "Ref_Eps" ~ " Reference",
+    TRUE ~ "No Reference :("
+  ))
+
+chart_arcs <- chart_guest %>% 
+  filter(!is.na(Actor)) %>% 
+  mutate(Coords = paste0(x, ",", y)) %>% 
+  select(Actor, Character, Coords, Episode_Type) %>% 
+  arrange(Actor) %>% 
+  group_by(Actor, Episode_Type) %>% 
+  mutate(id = row_number()) %>% 
+  ungroup() %>% 
+  spread(Episode_Type, Coords) %>% 
+  #FOr multiple Appearances
+  select(-id) %>% 
+  complete(Actor, Character, App_Eps, Ref_Eps) %>% 
+  #Continue
+  separate(App_Eps, c("x_start", "y_start")) %>% 
+  separate(Ref_Eps, c("x_end", "y_end")) %>% 
+  mutate_at(vars(dplyr::contains("x_"), dplyr::contains("y_")), as.numeric) %>% 
+  filter(!((x_end == x_start) & (y_end == y_start)))
+
+ggplot(chart_guest,
+       aes(x=x, y=y)) +
+  geom_tile(aes(color = color, fill=Guest_Type)) + 
+  scale_fill_manual(values= c(" Reference"="#FF00FF", " Appearance" = "#8A2BE2", "No Reference :("= "#CCCCdd" ) , na.value = "#cccccc") +
+  scale_color_identity() +
+  geom_text(data = x_labels, aes(x = x, y=1, label = label), hjust = 0,
+            color = "#00436b", fontface = "bold", nudge_x = -0.5) + 
+  scale_x_continuous(expand = c(0, 0)) +
+  scale_y_continuous(expand = c(0.16, 0.16), name = "Episode") +
+  geom_curve(data = chart_arcs, 
+           aes(x = x_start, xend = x_end, y = y_start, yend = y_end),
+           curvature = 0.15, size = 1, color = "#00436b") +
+  coord_fixed() +
+  labs(title = paste(sel_actor, "References & Guest Appearances"),
+       subtitle = "Will & Grace, Season 1-8",
+       caption = sel_guest_key$caption[1]) +
+  theme_bw() +
+  theme( 
+    axis.text.y = element_blank(),
+    axis.ticks.y = element_blank(),
+    axis.title.y = element_text(size = 12, face="bold"),
+    axis.line.y = element_blank(),
+    # axis.text.x = element_text(size = 12, face="bold"),
+    axis.text.x =  element_blank(),
+    axis.title.x = element_blank(),
+    axis.ticks = element_blank(),
+    panel.background=element_blank(),panel.border=element_blank(),
+    panel.grid.major=element_blank(),
+    panel.grid.minor=element_blank(),plot.background=element_blank(),
+    strip.background = element_rect(fill = "#00436b"),
+    strip.text = element_text(color = "white", face = "bold", size = 12),
+    plot.title = element_text(color = "#00436b", face = "bold", size = 16),
+    plot.subtitle = element_text(color = "#00436b", size = 14),
+    plot.caption = element_text(size = 11),
+    legend.position = "right"
+  )
+```
+
+### Total references in all episodes
+
+```{r references, include=FALSE}
+ref_all <- bind_rows(list(ref_1, ref_2, ref_3))
+
+unique_ref <- ref_all %>% count(actor) %>% arrange(desc(n))
+```
+
+Although Cher's two(!) appearances on Will & Grace do not create a paradox, she is the most referenced celebrity throughout the eight season with `r as.numeric(unique_ref[unique_ref == "cher", "n"])` total references.
+
+```{r chart_cher, fig.height=3, fig.width=10, echo = FALSE}
+
+sel_actor <- "Cher"
+
+sel_guest_key <- guest_key %>% 
+  filter(Actor == sel_actor)
+
+sel_guest_key <- sel_guest_key[1,]
+
+chart_guest <- eps_list %>% 
+  left_join(guest_stars3 %>% 
+              filter(Actor == sel_actor)
+            ) %>% 
+  mutate(color = ifelse(Season %% 2 == 0, "#999999", "white")) %>% 
+  mutate(Guest_Type = case_when(
+    Episode_Type == "App_Eps" ~ " Appearance",
+    Episode_Type == "Ref_Eps" ~ " Reference",
+    TRUE ~ "No Reference :("
+  ))
+
+chart_arcs <- chart_guest %>% 
+  filter(!is.na(Actor)) %>% 
+  mutate(Coords = paste0(x, ",", y)) %>% 
+  select(Actor, Character, Coords, Episode_Type) %>% 
+  arrange(Actor) %>% 
+  group_by(Actor, Episode_Type) %>% 
+  mutate(id = row_number()) %>% 
+  ungroup() %>% 
+  spread(Episode_Type, Coords) %>% 
+  #FOr multiple Appearances
+  select(-id) %>% 
+  complete(Actor, Character, App_Eps, Ref_Eps) %>% 
+  #Continue
+  separate(App_Eps, c("x_start", "y_start")) %>% 
+  separate(Ref_Eps, c("x_end", "y_end")) %>% 
+  mutate_at(vars(dplyr::contains("x_"), dplyr::contains("y_")), as.numeric) %>% 
+  filter(!((x_end == x_start) & (y_end == y_start)))
+
+ggplot(chart_guest,
+       aes(x=x, y=y)) +
+  geom_tile(aes(color = color, fill=Guest_Type)) + 
+  scale_fill_manual(values= c(" Reference"="#FF00FF", " Appearance" = "#8A2BE2", "No Reference :("= "#CCCCdd" ) , na.value = "#cccccc") +
+  scale_color_identity() +
+  geom_text(data = x_labels, aes(x = x, y=1, label = label), hjust = 0,
+            color = "#00436b", fontface = "bold", nudge_x = -0.5) + 
+  scale_x_continuous(expand = c(0, 0)) +
+  scale_y_continuous(expand = c(0.16, 0.16), name = "Episode") +
+  geom_curve(data = chart_arcs, 
+           aes(x = x_start, xend = x_end, y = y_start, yend = y_end),
+           curvature = 0.15, size = 1, color = "#00436b") +
+  coord_fixed() +
+  labs(title = paste(sel_actor, "References & Guest Appearances"),
+       subtitle = "Will & Grace, Season 1-8",
+       caption = sel_guest_key$caption[1]) +
+  theme_bw() +
+  theme( 
+    axis.text.y = element_blank(),
+    axis.ticks.y = element_blank(),
+    axis.title.y = element_text(size = 12, face="bold"),
+    axis.line.y = element_blank(),
+    # axis.text.x = element_text(size = 12, face="bold"),
+    axis.text.x =  element_blank(),
+    axis.title.x = element_blank(),
+    axis.ticks = element_blank(),
+    panel.background=element_blank(),panel.border=element_blank(),
+    panel.grid.major=element_blank(),
+    panel.grid.minor=element_blank(),plot.background=element_blank(),
+    strip.background = element_rect(fill = "#00436b"),
+    strip.text = element_text(color = "white", face = "bold", size = 12),
+    plot.title = element_text(color = "#00436b", face = "bold", size = 16),
+    plot.subtitle = element_text(color = "#00436b", size = 14),
+    plot.caption = element_text(size = 11),
+    legend.position = "right"
+  )
+```
+
+This is followed by `r as.numeric(unique_ref[unique_ref == "katie couric", "n"])` references about Katie Couric and `r as.numeric(unique_ref[unique_ref == "barry manilow", "n"])` about Barry Manilow and Kevin Bacon. Madonna is the most referenced paradox guest star with `r as.numeric(unique_ref[unique_ref == "madonna", "n"])` references over `r as.numeric(guest_key[guest_key == "Madonna", "Num_Ref_Eps"])` episodes.
+
+### Full list of the guest star paradoxes
+
+```{r paradox_table_show, echo=FALSE}
+
+knitr::kable(filter(guest_table, !Self) %>% select(-Self))
+
+```
+
+***
+
+*This post is a work in progress and will be edited over time. Yes, I spent my extra Daylights Savings hour doing silly data analysis.*

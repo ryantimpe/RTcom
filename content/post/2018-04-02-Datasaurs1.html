@@ -1,0 +1,95 @@
+---
+title: 'Datasaurs: Building a Twitter bot with the tidyverse'
+author: Ryan Timpe
+date: '2018-04-04'
+slug: Datasaurs1
+categories:
+  - Dinosaurs
+  - Bots
+tags:
+  - Datasaurs
+  - R
+summary: "Using the tidyverse in R to find spurious correlations between dinosaur outlines and cause of death data."
+header: 
+  image: "posts/Datasaurs1.jpg"
+
+---
+
+
+
+<p><strong>Work in Progress</strong></p>
+<div id="mathematical-doodling" class="section level3">
+<h3>Mathematical doodling</h3>
+<p>I used to ease boredom during undergrad economics lectures by doodling creatures under my supply &amp; demand curves. 10 years later, still bored, but also increasingly lazy, I began to wonder if I could get my computer to doodle the creatures for me. A few days later, <a href="https://twitter.com/Datasaurs">Datasaurs</a> was born.</p>
+<p>Datasaurs is a Twitter bot that, every few hours, posts a dinosaur image (or other extinct and occassionally extant animal) along with a monthly time series of U.S. cause of death data that is highly correlated with the animal’s outline (much like Tyler Vigen’s <a href="http://www.tylervigen.com/spurious-correlations">Spurious Correlations</a>). It then, to various levels of success, redraws the animal with the time series as the new outline.</p>
+</div>
+<div id="the-goal" class="section level3">
+<h3>The Goal</h3>
+<p>Sticking with my <a href="../../../../categories/dinosaurs/">brand</a>, this post is an overview of the R process behind each tweet, from processing the data, plotting the new creature, and posting the text and image on Twitter.</p>
+<p>All scripts and data used in Datasaurs can be found on my <a href="https://github.com/ryantimpe/datasaurs">GitHub</a>.</p>
+</div>
+<div id="the-data" class="section level3">
+<h3>The Data</h3>
+<p>The bot is dependent on two key inputs: silhoette images of dinosaurs (or other animals) and cause of death time series.</p>
+<p>The images are from <a href="http://phylopic.org/image/browse/">PhyloPic</a>. While there are some awesome <a href="https://github.com/sckott/rphylopic">R packages</a> that can import images from PhyloPic, for now, I have manually curated the images used in the bot to ensure the images will work well with my goal. This also allows me to save some extra metadata with each image, including the direction the animal is facing, common family names, and the Twitter handles of the artists.</p>
+<p>The U.S. cause of death time series data is downloaded from the Center for Disease Control <a href="https://wonder.cdc.gov/ucd-icd10.html">Wonder database</a>. I downloaded 24 subsets of the data by age, race, gender, and region. The CDC redacts any queries that yield too few results, so I’ve kept these high-level.</p>
+</div>
+<div id="creating-a-datasaur" class="section level3">
+<h3>Creating a Datasaur</h3>
+<p>Every 4 to 6 hours<a href="#fn1" class="footnoteRef" id="fnref1"><sup>1</sup></a>, the script generates a new Datasaur in a handful of steps. Each of these steps in contained inside of a function, with each function returning a list object that contributes to the final Datasaur.</p>
+<pre class="r"><code>datasaur &lt;- sample(dino_info$Fauna, 1) %&gt;% 
+  naked_datasaur() %&gt;% 
+  skin_datasaur(next_tweet_number %&gt;% choose_pattern()) %&gt;% 
+  plot_datasaur() %&gt;% 
+  text_datasaur()</code></pre>
+<div id="selecting-the-data" class="section level4">
+<h4>Selecting the data</h4>
+<p>The bot begins by sampling one animal name from the metadata file <code>dino_info$Fauna</code> (currently 252) and passing it into the function <code>naked_datasaur()</code>. This function imports the image of the animal and converts it to a matrix of values between 0 and 1, with each value representing one pixel in the image. To add some variation to each bot run, there’s a 50% chance of reversing each x value, creating a mirror image of the original image.</p>
+<p>The goal is to find correlations with the shape of the animal, so for each x value, I extract the maximum y value. I then convert this line into a time series beginning any month between 1997 and 2002. The CDC cause of death begins in January 1999, so these possible starting dates further increase the variability of each run.</p>
+<p>The function then chooses one of the top 33% correlated cause of death series to use for the Datasaur. The series is normalized to be on the same scale as the animal and ensuring all points on the line are at least a handful of pixels greater than the minimum animal y-value. The animal’s maximum y-value is then replaced with the cause of death data, resulting in the silhoette image of the Datasaur.</p>
+</div>
+<div id="adding-a-pattern-and-color" class="section level4">
+<h4>Adding a pattern and color</h4>
+<p>Once the bot has successfully<a href="#fn2" class="footnoteRef" id="fnref2"><sup>2</sup></a> drawn a new Datasaur shape, it colors it using a combination of the <code>skin_datasaur()</code> and <code>choose_pattern()</code> functions.</p>
+<p>The <code>skin_datasaur()</code> function requires two inputs: the naked Datasaur and instructions for how to color it. The <code>choose_pattern()</code> returns a list object of these instructions.</p>
+<pre class="r"><code>datasaur_pattern &lt;- choose_pattern()
+
+head(datasaur_pattern, 3)</code></pre>
+<pre><code>## $col1
+## [1] &quot;Green&quot;
+## 
+## $col2
+## [1] &quot;Green&quot;
+## 
+## $pattern
+## [1] &quot;spotted&quot;</code></pre>
+<p>The two colors specify the general name of the colors to use in the Datasaur, with <code>col1</code> being the primary color and <code>col2</code> being the detail. Except for holidays<a href="#fn3" class="footnoteRef" id="fnref3"><sup>3</sup></a>, <code>col1</code> will always be green, while <code>col2</code> is green approximately 95% of the time, with other options including blue, gold, dark, or Golden Girls<a href="#fn4" class="footnoteRef" id="fnref4"><sup>4</sup></a> colors.<a href="#fn5" class="footnoteRef" id="fnref5"><sup>5</sup></a></p>
+<p>From there, the <code>skin_datasaur()</code> function draws a pattern on the Datasaur using the supplied colors. For each possible pattern (e.g. stripes, dotted), there are randomly generated parameters that make each function call unique, such a stripe width, dot radius, and dot frequency. There’s also an alpha layer, which adds some shadowing to each Datasaur rendering.</p>
+</div>
+<div id="creating-a-tweet" class="section level4">
+<h4>Creating a tweet</h4>
+<p>The last two functions build the graphic using <a href="http://ggplot2.org/">ggplot2</a> &amp; <a href="https://cran.r-project.org/web/packages/gridExtra/vignettes/arrangeGrob.html">gridExtra</a> and then writes the tweet text.</p>
+<p>I recently rewrote the plotting function, going for an antique science poster &amp; textbook look. The image and the tweet text are mostly the same, though with the tweet text the bot samples a selection of hashtags to include, a shameless way to try to get more views and likes.</p>
+<div class="figure">
+<img src="/img/posts/v1p0%202018-03-30%2010.png" id="id" class="class" width="400" />
+
+</div>
+</div>
+</div>
+<div id="scheduling-publishing" class="section level3">
+<h3>Scheduling &amp; Publishing</h3>
+<p>In order to use R to publish a tweet, you’ll need to set up a Twitter account and API. <a href="https://www.r-bloggers.com/setting-up-the-twitter-r-package-for-text-analytics/">This post</a> explains how to do this, as well as tips for using the TwitteR library.</p>
+<p>I could use <a href="https://medium.com/@emckean/create-a-simple-free-text-driven-twitterbot-with-aws-lambda-node-js-b80e26209f5">AWS</a>, but instead I use a Windows desktop with a simple batch file that (1) opens R and (2) runs the Datasaur script.</p>
+<pre><code>start &quot;&quot; &quot;C:\Program Files\R\R-3.4.1\bin\R.exe&quot; CMD BATCH &quot;F:\__RT Docs\Datasaurs\D1_RunBot.R&quot;</code></pre>
+<p>Finally, I use Windows Task Scheduler to automatically run this batch file every few hours.</p>
+</div>
+<div class="footnotes">
+<hr />
+<ol>
+<li id="fn1"><p>I’ve not yet optimized the frequency of generating Datasaurs. I need enough for my own amusement, but not too many to cause people to unfollow the account. 🤷🏻‍♀️<a href="#fnref1">↩</a></p></li>
+<li id="fn2"><p>While I’ve improved the rendering significantly over the past few months, the bot can produce some very glitchy-looking animals. <img src="/img/posts/Glitchsaur.jpg" id="id" class="class" width="300" /><a href="#fnref2">↩</a></p></li>
+<li id="fn3"><p>Currently, Datasaurs have special patterns on New Years, Valentine’s Day, St. Patrick’s day, American patriotic holidays, Pride month, and Christmas.<a href="#fnref3">↩</a></p></li>
+<li id="fn4"><p>I spent so much time looking at ugly 1980’s wicker furniture in Miami colors while writing up the <a href="http://www.ryantimpe.com/2018/02/05/gg-drinkinggame/">Golden Girls Drinking Game</a> post that I ended up really liking the palette.<a href="#fnref4">↩</a></p></li>
+<li id="fn5"><p>I also pass the variable <code>next_tweet_number</code> (the index of the next Datasaur) into the <code>choose_pattern()</code> function. Every 100 and 500 Datasaurs, there will be a special pattern and color combination produced by the function. This from a function in the <a href="https://cran.r-project.org/web/packages/twitteR/twitteR.pdf">twitteR</a> package, which is also used to publish each tweet.<a href="#fnref5">↩</a></p></li>
+</ol>
+</div>

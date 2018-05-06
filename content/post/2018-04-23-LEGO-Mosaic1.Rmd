@@ -1,0 +1,394 @@
+---
+title: 'How To: LEGO mosaics from photos using R & the tidyverse'
+author: Ryan Timpe
+date: '2018-04-23'
+slug: LEGO-mosaic1
+categories:
+  - LEGO
+  - Data Viz
+tags:
+  - Golden Girls
+  - R
+summary: 'Instructions for turning any photo into a LEGO mosaic using R and the tidyverse.'
+header: 
+  image: "posts/LEGOMosaicGG.jpg"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, warning = FALSE, message = FALSE)
+
+library(tidyverse); library(jpeg)
+
+lego_colors <- read_csv("LEGOMosaic/Lego_Colors.csv")
+
+theme_lego <- theme(panel.background = element_rect(fill = "#7EC0EE"),
+        strip.background = element_rect(fill = "#F7F18D"),
+        strip.text = element_text(color = "#333333", face = "bold"),
+        axis.line = element_blank(),
+        axis.title.x = element_blank(),
+        axis.text.x = element_blank(),
+        axis.ticks.x = element_blank(),
+        axis.line.x = element_blank(),
+        axis.title.y = element_blank(),
+        axis.text.y = element_blank(),
+        axis.ticks.y = element_blank(),
+        axis.line.y = element_blank())
+```
+
+
+### Introduction
+
+In the flagship store in London, LEGO installed the [Mosaic Maker](https://www.legoland.co.uk/tickets-and-passes/parking-q-bot-and-extras/lego-mosaic-maker/), a machine that will take a photo of your face and turn it into a black-and-white LEGO mosaic. Sadly, those of us who aren't in London miss out on the fun... or do we?
+
+### The Goal
+
+Using R and the tidyverse, we can turn a photo into a 48 x 48 brick LEGO set. We'll use official LEGO colors and optimize the number of bricks we use to keep the price low.
+
+### Prepare the image
+
+Pick an image; any image. For better results, choose one with some contrast. We're going to reduce a photo to a resolution of 48 x 48 "pixels" and limit ourselves to just `r nrow(lego_colors %>% filter(c_Palette2016, !c_Transparent, !c_Glow, !c_Metallic))` colors. Comparatively, the original image probably has over a million pixels and 256 million possible colors. Choosing an image with more contrast will make a better mosaic.
+
+Lucky for me, 1980's television is literally defined by bright, contrasting colors (and laugh tracks). For the remainder of this tutorial, I'll be using this Golden Girls[^GG] promotional image.
+
+[^GG]: New life goal. Sneak the [Golden Girls](http://www.ryantimpe.com/2018/02/05/gg-drinkinggame/) into as many data science projects as possible. `r emo::ji("older_woman")``r emo::ji("older_woman")``r emo::ji("older_woman")``r emo::ji("older_woman")`
+
+![](../../../../post/LEGOMosaic/goldengirls.jpg){#id .class width=350px}
+
+We start by writing a function to import the photo. This function gives us a data frame with one row for each pixel, with the X, Y, and red, green, & blue channel values. It then rescales the X and Y values to be within our image size, averaging the R, G, and B values. If the image is not square, the function crops the image to a square in the center of the image.
+
+```{r fun_scale_image, echo=TRUE, warning=FALSE, message=FALSE}
+library(tidyverse); library(jpeg)
+
+scale_image <- function(image, img_size){
+  #Convert image to a data frame with RGB values
+  img <- bind_rows(
+    list(
+      (as.data.frame(image[, , 1]) %>% mutate(y=row_number(), channel = "R")),
+      (as.data.frame(image[, , 2]) %>% mutate(y=row_number(), channel = "G")),
+      (as.data.frame(image[, , 3]) %>% mutate(y=row_number(), channel = "B"))
+    )
+  ) %>% 
+    gather(x, value, -y, -channel) %>% 
+    mutate(x = as.numeric(gsub("V", "", x))) %>% 
+    spread(channel, value)
+  
+  #Wide or tall image? Shortest side should be `img_size` pixels
+  if(max(img$x) > max(img$y)){
+    img_scale_x <-  max(img$x) / max(img$y)
+    img_scale_y <- 1
+  } else {
+    img_scale_x <- 1
+    img_scale_y <-  max(img$y) / max(img$x)
+  }
+  
+  #Rescale the image
+  img2 <- img %>% 
+    mutate(y_scaled = (y - min(y))/(max(y)-min(y))*img_size*img_scale_y + 1,
+           x_scaled = (x - min(x))/(max(x)-min(x))*img_size*img_scale_x + 1) %>% 
+    select(-x, -y) %>% 
+    group_by(y = ceiling(y_scaled), x = ceiling(x_scaled)) %>% 
+    #Get average R, G, B and convert it to hexcolor
+    summarize_at(vars(R, G, B), funs(mean(.))) %>% 
+    rowwise() %>% 
+    mutate(color = rgb(R, G, B)) %>% 
+    ungroup() %>% 
+    #Center the image
+    filter(x <= median(x) + img_size/2, x > median(x) - img_size/2,
+           y <= median(y) + img_size/2, y > median(y) - img_size/2) %>%
+    #Flip y
+    mutate(y = max(y) - y + 1)
+  
+  return(img2)
+}
+
+image_1 <- readJPEG("LEGOMosaic/goldengirls.jpg") %>% scale_image(48)
+
+```
+
+```{r fun_scale_image_run, fig.height=3, fig.width=3, echo=FALSE, warning=FALSE, message=FALSE}
+ggplot(image_1, aes(x=x, y=y, fill = color)) +
+  geom_raster()+
+  scale_fill_identity() +
+  coord_fixed(expand = FALSE) +
+  theme_minimal() +
+  theme_lego
+```
+
+### Converting this image to LEGO colors
+
+I'm fortunate that ~~nerds~~ LEGO fans before me have figured out the [RGB values](http://www.bartneck.de/2016/09/09/the-curious-case-of-lego-colors/) of every official LEGO color. Turns out that LEGO tinkers with their colors often, so I've limited this project to just those on [LEGO's official 2016 list](http://www.bartneck.de/wp-content/uploads/2016/09/2016-LEGO-color-palette.pdf), excluding transparent, glow, and metallic bricks. That leaves us with `r nrow(lego_colors %>% filter(c_Palette2016, !c_Transparent, !c_Glow, !c_Metallic))` unique colors to use in the mosaic. A csv file of those colors can be found [here](https://github.com/ryantimpe/LEGOMosaics/blob/master/Colors/Lego_Colors.csv).[^colors]
+
+[^colors]: I've included columns in here that provide additional details about each brick. These can be used to filter the colors to specific themes.
+
+The challenge here is to swap out every color in the scaled image for a similar color in the official LEGO palette. There's probably a faster way to do this, but for each "pixel", I find the LEGO color that has the shortest Euclidean distance of the R, G, & B values.
+
+This gives us the **almost** finished image below, complete with stud details.
+
+```{r fun_color_image, echo=TRUE, warning=FALSE, message=FALSE}
+
+#Import colors and filter to standard colors
+lego_colors <- read_csv("LEGOMosaic/Lego_Colors.csv") %>% 
+  filter(c_Palette2016, !c_Transparent, !c_Glow, !c_Metallic) %>% 
+  mutate_at(vars(R, G, B), funs(./255)) %>% 
+  rename(R_lego = R, G_lego = G, B_lego = B)
+
+convert_to_lego_colors <- function(R, G, B){
+  lego_colors %>% 
+    mutate(dist = ((R_lego - R)^2 + (G_lego - G)^2 + (B_lego - B)^2)^(1/2)) %>% 
+    top_n(-1, dist) %>% 
+    mutate(Lego_color = rgb(R_lego, G_lego, B_lego)) %>% 
+    select(Lego_name = Color, Lego_color)
+}
+
+legoize <- function(image){
+  image %>% 
+    mutate(lego = purrr::pmap(list(R, G, B), convert_to_lego_colors)) %>% 
+    unnest(lego)
+}
+
+image_2 <- image_1 %>% legoize()
+
+```
+
+```{r fun_color_image_run, fig.height=5, fig.width=5, echo=FALSE, warning=FALSE, message=FALSE}
+ggplot(image_2, aes(x=x, y=y, fill = Lego_color)) +
+  geom_tile(width = 0.9, height = 0.9)+
+  scale_fill_identity() +
+  geom_point(color = "#333333", alpha = 0.2, shape = 1, size = 2) +
+  coord_fixed(expand = FALSE) +
+  theme_minimal()+
+  theme_lego +
+  theme(panel.background = element_rect(fill = "#666666"))
+```
+
+### Reducing the piece count
+
+With the `legoize()` function, we get a complete LEGO set with `r 48*48` pieces, just like the LEGO Mosaic Maker in London (except ours is in color and way better). However, the [Pick-a-Brick](https://shop.lego.com/en-US/Pick-a-Brick) section on Lego.com lists 1 x 1 plates (the shallow bricks) at \$0.06 each, plus \$14.99 for a base plate, giving our mosaics a hefty pre-tax price tag of \$`r round(48*48*0.06 + 14.99, 2)`. LEGO sets are expensive.[^actual_price]
+
+[^actual_price]: The Mosaic Maker set costs £99.99, around \$140 USD. This price is close to the cost of our set filled with 1 x 1 bricks, but the Mosaic Maker comes with *many* extra pieces.
+
+BUT WAIT! We can hack the system. A 1 x 2 or 1 x 3 plate costs just \$0.07, doubling or tripling our coverage for just a penny more. 1 x 4 and 2 x 2 plates are \$0.11 and a 2 x 4 plate costs \$0.14.[^price] If we cover as much area as we can with the larger plates, we can build a cheaper mosaic.
+
+[^price]: These prices are for the plates with studs on the top. If I were actually building a mosaic, I'd prefer to use the flat pieces. However, those come in fewer colors and have a very strange pricing model: 2 x 2 flat plates are \$0.08 while 2 x 4 costs \$0.21, making it cheaper to use 2 x 2 plates everywhere. `r emo::ji("shrug")`
+
+This next function isn't elegant, but it iteratively groups X and Y coordinates into various brick sizes, checking to see if all brick pixels in the group are the same color. If they are, they are allocated to this single brick.
+
+```{r fun_brick_image, echo=TRUE, warning=FALSE, message=FALSE}
+
+collect_bricks <- function(image){
+  img <- image %>% 
+    select(x, y, Lego_name, Lego_color) %>% 
+    #4x2 bricks - horizontal
+    group_by(xg = x %/% 4, yg = y %/% 2) %>% 
+    mutate(g_1_x4y2_0 = ifelse(length(unique(Lego_name)) == 1 & n() == 8,
+                               paste0("x4y2_", "x", min(x), "_y", min(y)), NA)) %>% 
+    #4x2 bricks - vertical
+    ungroup() %>% group_by(xg = x %/% 2, yg = y %/% 4) %>% 
+    mutate(g_2_x2y4_0 = ifelse(length(unique(Lego_name)) == 1 & n() == 8,
+                               paste0("x2y4_", "x", min(x), "_y", min(y)), NA)) %>% 
+    #2x2 bricks
+    ungroup() %>% group_by(xg = x %/% 2, yg = y %/% 2) %>% 
+    mutate(g_5_x2y2_0 = ifelse(length(unique(Lego_name)) == 1 & n() == 4,
+                               paste0("x2y2_", "x", min(x), "_y", min(y)), NA)) %>% 
+    #4x1 bricks - horizontal
+    ungroup() %>% group_by(xg = x %/% 4, yg = y ) %>% 
+    mutate(g_7_x4y1_0 = ifelse(length(unique(Lego_name)) == 1 & n() == 4,
+                               paste0("x4y1_", "x", min(x), "_y", min(y)), NA)) %>% 
+    #4x1 bricks -  vertical
+    ungroup() %>% group_by(xg = x, yg = y %/% 4) %>% 
+    mutate(g_8_x1y4_1 = ifelse(length(unique(Lego_name)) == 1 & n() == 4,
+                               paste0("x1y4_", "x", min(x), "_y", min(y)), NA)) %>% 
+    #3x1 bricks - horizontal
+    ungroup() %>% group_by(xg = x %/% 3, yg = y ) %>% 
+    mutate(g_7_x3y1_0 = ifelse(length(unique(Lego_name)) == 1 & n() == 3,
+                               paste0("x3y1_", "x", min(x), "_y", min(y)), NA)) %>% 
+    #3x1 bricks -  vertical
+    ungroup() %>% group_by(xg = x, yg = y %/% 3) %>% 
+    mutate(g_8_x1y3_1 = ifelse(length(unique(Lego_name)) == 1 & n() == 3,
+                               paste0("x1y3_", "x", min(x), "_y", min(y)), NA)) %>% 
+    #2x1 bricks - horizontal
+    ungroup() %>% group_by(xg = x %/% 2, yg = y ) %>% 
+    mutate(g_9_x2y1_0 = ifelse(length(unique(Lego_name)) == 1 & n() == 2,
+                               paste0("x2y1_", "x", min(x), "_y", min(y)), NA)) %>% 
+    #2x1 bricks -  vertical
+    ungroup() %>% group_by(xg = x, yg = y %/% 2) %>% 
+    mutate(g_10_x1y2_1 = ifelse(length(unique(Lego_name)) == 1 & n() == 2,
+                                paste0("x1y2_", "x", min(x), "_y", min(y)), NA)) %>% 
+    #1x1
+    ungroup() %>% mutate(g_11_x1y1_0 = paste0("x1y1_", "x", x, "_y", y)) %>% 
+    select(-xg, -yg)
+  
+  img2 <- img %>% 
+    gather(Brick, brick_id, dplyr::starts_with("g_")) %>% 
+    #Only keep first Brick group has a name
+    group_by(x, y) %>% 
+    filter(Brick == Brick[min(which(!is.na(brick_id)))]) %>% 
+    ungroup() %>% 
+    # min/max coord for geom_rect()
+    group_by(Brick, brick_id, Lego_color, Lego_name) %>% 
+    summarise(xmin = min(x)-0.5, xmax = max(x)+0.5,
+           ymin = min(y)-0.5, ymax = max(y)+0.5) %>% 
+    ungroup()
+  
+  return(img2)
+}
+
+image_3 <- image_2 %>% collect_bricks()
+```
+
+```{r fun_brick_image_run, fig.height=5, fig.width=5, echo=TRUE, warning=FALSE, message=FALSE}
+
+display_set <- function(image, title=NULL){
+  coord_x <- c(min(image$xmin)+0.5, max(image$xmax)-0.5)
+  coord_y <- c(min(image$ymin)+0.5, max(image$ymax)-0.5)
+    
+  ggplot(image) +
+    geom_rect(aes(xmin=xmin, xmax=xmax, ymin=ymin, ymax=ymax,
+                  fill = Lego_color), color = "#333333")+
+    scale_fill_identity() +
+    geom_point(data = expand.grid(x=coord_x[1]:coord_x[2], y=coord_y[1]:coord_y[2]),
+               aes(x=x, y=y), color = "#333333", alpha = 0.2, shape = 1, size = 2) +
+    coord_fixed(expand = FALSE) +
+    labs(title = title) +
+    theme_minimal() +
+    theme_lego
+} 
+
+image_3 %>% display_set()
+
+```
+
+```{r fun_brick_pieces, include=FALSE}
+#Prices
+piece_prices <- tibble(
+  Brick_size = c("4 x 2", "2 x 2", "4 x 1", "3 x 1", "2 x 1", "1 x 1"),
+  Brick_price = c(0.14, 0.11, 0.11, 0.07, 0.07, 0.06)
+)
+
+#Pieces in set
+pieces_by_color <- image_3 %>% 
+  separate(Brick, c("g", "gn", "size", "gi")) %>% 
+  select(-g, -gn, -gi) %>% 
+  mutate(size1 = as.numeric(substr(size, 2, 2)), 
+         size2 = as.numeric(substr(size, 4, 4))) %>% 
+  mutate(Brick_size = ifelse(size1>size2, paste(size1, "x", size2), paste(size2, "x" , size1))) %>% 
+  count(Brick_size, Lego_name) %>% 
+  arrange(desc(Brick_size), desc(n))
+
+pieces_by_size <- pieces_by_color %>% 
+  group_by(Brick_size) %>% 
+  summarise(n = sum(n)) %>% 
+  ungroup() %>% 
+  left_join(piece_prices, by = "Brick_size")
+
+```
+
+This set now contains `r pieces_by_size %>% summarise(cost = sum(n)) %>% as.numeric` pieces total, reduced from `r 48*48`, and is prices at \$`r pieces_by_size %>% summarise(cost = sum(n*Brick_price)) %>% as.numeric + 14.99`, saving us \$`r round(48*48*0.06 - pieces_by_size %>% summarise(cost = sum(n*Brick_price)) %>% as.numeric, 0)` off the original mosaic. This is not the absolute minimum price - we could further optimize the brick count by adding offsets to the brick groups or including larger bricks.
+
+### But how do I build it?!
+
+It's not a LEGO set without instructions! We can get a count of all the bricks we need by passing the output of `collect_bricks()` to `count()` by brick size and color. (Then go shopping!)
+
+The final function splits the image into building steps. We can pass the function an arbitrary number of steps to generate row-by-row instructions without splicing any bricks.[^theme_lego]
+
+[^theme_lego]: `theme_lego` calls the `ggplot2::theme()` function, removing most lines from the chart and adding color to the panel and facet strips. This is available in full on GitHub.
+
+```{r fun_construct_image, fig.height=6.5, fig.width=7, echo=TRUE, warning=FALSE, message=FALSE}
+generate_instructions <- function(image, num_steps) {
+  rows_per_step <- ceiling((max(image$ymax)-0.5) / num_steps)
+  
+  create_steps <- function(a) {
+    image %>% 
+      group_by(brick_id) %>% 
+      filter(min(ymin) <= a*rows_per_step+(min(image$ymin)+0.5)) %>% 
+      ungroup() %>%
+      mutate(Step = paste("Step", (if(a<10){paste0('0', a)}else{a})))
+  }
+  
+  1:num_steps %>% 
+    map(create_steps) %>% 
+    bind_rows()
+}
+
+image_3 %>% generate_instructions(12) %>%
+  ggplot() +
+  geom_rect(aes(xmin=xmin, xmax=xmax, ymin=ymin, ymax=ymax,
+                fill = Lego_color), color = "#333333")+
+  scale_fill_identity() +
+  coord_fixed(expand = FALSE) +
+  facet_wrap(~Step, ncol = 4) +
+  theme_minimal() +
+  theme_lego
+```
+
+### Conclusion
+
+I had set out to use [deep learning](https://keras.io/) to convert images into 3D LEGO sets. That project is still in the pipeline. However, once I realized how easy a tidyverse mosaic would be without machine learning, I wanted to share the tutorial.
+
+Does it really work for any photo? Yes. Here are some selfies, divas, and pet photos.
+
+```{r other_set_ex, echo=TRUE, eval=FALSE}
+readJPEG("LEGOMosaic/selfiecher.jpg") %>% 
+  scale_image(48) %>%
+  legoize() %>%
+  collect_bricks() %>% 
+  display_set("Selfie with a Cher poster")
+```
+
+```{r other_sets, fig.height=5, fig.width=5, echo=FALSE, warning=FALSE, message=FALSE}
+
+# ex_selfie <- readJPEG("LEGOMosaic/selfiecher.jpg") %>% 
+#   scale_image(48) %>% 
+#   legoize() %>% 
+#   collect_bricks() 
+# 
+# saveRDS(ex_selfie, "LEGOMosaic/selfiecher.RDS")
+
+readRDS("LEGOMosaic/selfiecher.RDS") %>% 
+  display_set("Selfie with a Cher poster")
+
+# ex_bob <- readJPEG("LEGOMosaic/bobcatbrick.jpg") %>% 
+#   scale_image(48) %>% 
+#   legoize() %>% 
+#   collect_bricks() 
+# 
+# saveRDS(ex_bob, "LEGOMosaic/bobcatbrick.RDS")
+
+readRDS("LEGOMosaic/bobcatbrick.RDS") %>%
+  display_set("Bobcat")
+
+# ex_henry <- readJPEG("LEGOMosaic/henry.jpg") %>% 
+#   scale_image(48) %>% 
+#   legoize() %>% 
+#   collect_bricks() 
+# 
+# saveRDS(ex_henry, "LEGOMosaic/henry.RDS")
+
+readRDS("LEGOMosaic/henry.RDS") %>%
+  display_set("Henry")
+
+# ex_madonna <- readJPEG("LEGOMosaic/madonnatrueblue.jpg") %>%
+#   scale_image(48) %>%
+#   legoize() %>%
+#   collect_bricks()
+# 
+# saveRDS(ex_madonna, "LEGOMosaic/madonnatrueblue.RDS")
+
+readRDS("LEGOMosaic/madonnatrueblue.RDS") %>%
+  display_set("Madonna, True Blue")
+
+# ex_hillary<- readJPEG("LEGOMosaic/hillary.jpg") %>%
+#   scale_image(48) %>%
+#   legoize() %>%
+#   collect_bricks()
+# 
+# saveRDS(ex_hillary, "LEGOMosaic/hillary.RDS")
+
+readRDS("LEGOMosaic/hillary.RDS") %>%
+  display_set("Hillary Clinton")
+
+```
+
+***
+
+*Try it out! Full script can be found on [GitHub](https://github.com/ryantimpe/LEGOMosaics)!*

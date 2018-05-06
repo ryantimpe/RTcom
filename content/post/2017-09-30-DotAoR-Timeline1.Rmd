@@ -1,0 +1,340 @@
+---
+title: 'Data of the Age of Reptiles: Part 1 - The Timeline'
+author: Ryan Timpe
+date: '2017-12-20'
+slug: AOR-timeline1
+categories:
+  - Dinosaurs
+  - Data Viz
+tags:
+  - Age of Reptiles
+  - R
+summary: 'Introduction to the Data of the Age of Reptiles series of post. Analysis of the timeline represented in the mural.'
+header: 
+  image: "posts/AgeOfReptiles.jpg"
+  caption: "[**Yale Peabody Museum**](http://peabody.yale.edu/exhibits/age-reptiles-mural)"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, warning = FALSE, message = FALSE)
+
+library(tidyverse)
+
+aor.raw2 <- readRDS("DotAoR/AoR_DF.rds")
+timeline.period <- readRDS("DotAoR/timeline.rds")
+
+aor <- aor.raw2 %>% 
+  mutate(value_hex = as.character(as.hexmode(round(value*255)))) %>% 
+  mutate(value_hex = ifelse(nchar(value_hex) == 1, paste0("0", value_hex), value_hex)) %>% 
+  select(-value) %>% 
+  spread(channel, value_hex) %>% 
+  mutate(color = toupper(paste0("#", R, G, B)))
+
+```
+
+*Work in Progress*  
+
+### Introduction
+
+The Great Hall of the Yale Peabody Museum is home to one of the world's largest scientifically accurate\* natual history murals. The [Age of Reptiles](http://peabody.yale.edu/exhibits/age-reptiles-mural) mural, painted by Rudolph Zallinger from 1942-47, spans a 110ft wall in the hall and depicts the museum's specimens as they might have looked when alive.
+
+Even after 4 years of volunteering, I still discover new details in the painting each time I visit. I have read the [book about the mural](https://www.amazon.com/Age-Reptiles-Science-Zallingers-Dinosaur/dp/0912532769/) (and the [book about the Peabody](https://www.amazon.com/House-Lost-Worlds-Dinosaurs-Dynasties/dp/0300226926/)), but I still have questions about the art and science behinds Zallinger's work.
+
+I'm not a paleobiologist or an artist, but I hope to use my skills as a data scientist to answer some of the questions I have asked myself over the past few years.
+
+\* Scientifically accurate in the 1940s... maybe.
+
+### The Data
+
+A jpeg image of the Age of Reptiles mural (or any image) is a dataset with five dimensions: x- & y-cooridates and red, green, and blue light channels. Using R, I converted the jpeg with resolution (1250*167) to a dataframe of 626k total values to proceed with the analysis.
+
+### A Timeline?
+
+The mural is a timeline, spanning five geological periods between 65 milllion and 362 million years ago. Zallinger splits the mural into these periods using large trees spanning the height of the mural.
+
+Many of my questions about the mural include breakdowns by these five periods, so my first processing task was to convert the 1250 horizontal pixels into years, and then grouping them by the start/end dates of the geological periods. 
+
+```{r orig_time}
+length_x <- 1250
+time_start <- 362*10^6
+time_end <- 65*10^6
+
+k_years_per_px <- round((time_start - time_end)/(length_x * 1000))
+```
+
+On average, if the Age of Reptiles mural were a true timeline, it would cover an impressive `r k_years_per_px` thousand years in each pixel. In the 110ft long actual painting, each inch of paint would cover `r round((time_start - time_end)/(110*12*1000))` thousand years.
+
+Cutting those pixels into the geological periods and overlaying them on the painting results in the image below: 
+
+```{r orig_w_constanttime, echo=FALSE, fig.height=3, fig.width=10}
+
+aor.orig <- aor %>%
+  mutate(y = max(y) - y) %>% 
+  mutate(year = (362-65)/(max(x))*x + 65) %>% 
+  #TIme period, as painted
+  mutate(period = case_when(
+    year <= timeline.period$ef_earliest[1] ~ timeline.period$period[1],
+    year <= timeline.period$ef_earliest[2] ~ timeline.period$period[2], 
+    year <= timeline.period$ef_earliest[3] ~ timeline.period$period[3], 
+    year <= timeline.period$ef_earliest[4] ~ timeline.period$period[4], 
+    TRUE ~ timeline.period$period[5]
+  ))
+
+aor.orig.x <- timeline.period %>% 
+  select(label = period, value = x_median) %>% 
+  bind_rows(timeline.period %>% 
+              select(label = earliest, value = x_earliest) %>% 
+              mutate(label = as.character(label))) %>% 
+  arrange(value)
+
+ggplot(aes(x=x, y=y),
+       data = aor.orig) +
+  geom_tile(aes(fill = color)) +
+  scale_fill_identity() +
+  scale_x_continuous(limits = c(0, 1250),
+                     breaks = c(0, aor.orig.x$value),
+                     labels = c(65, aor.orig.x$label),
+                     expand = c(0.005, 0.005),
+                     name = "Million years ago") +
+  scale_y_continuous(expand = c(0, 0)) +
+  geom_vline(data = timeline.period, aes(xintercept = x_earliest),
+             color="white", size=1.5) +
+  labs(title = paste0("Original Painting - Assuming ", k_years_per_px, "k years/px"),
+       subtitle = "The Age of Reptiles | Rudolph Zallinger",
+       caption = "Yale Peabody Museum | Ryan Timpe") +
+  coord_fixed() +
+  theme_bw() +
+  theme( 
+    axis.text.y = element_blank(),
+    axis.ticks.y = element_blank(),
+    axis.title.y = element_blank(),
+    axis.line.y = element_blank(),
+    axis.text.x = element_text(size = 11),
+    panel.background=element_blank(),panel.border=element_blank(),
+    panel.grid.major=element_blank(),
+    panel.grid.minor=element_blank(),plot.background=element_blank(),
+    strip.background = element_rect(fill = "#00436b"),
+    strip.text = element_text(color = "white", face = "bold", size = 12),
+    plot.title = element_text(color = "#00436b", face = "bold", size = 16),
+    plot.subtitle = element_text(color = "#00436b", size = 14),
+    plot.caption = element_text(size = 11)
+  )
+  
+```
+
+These calculated period boundaries (the white lines) do not overlap with the painted boundaries (large trees). The calculated Cretaceous/Jurassic boundary is slightly to the right of the tree divider. The calculated Jurassic/Triassic boundary splices the head of an Allosaurus, while the boundary tree is far closer to the Permian period.
+
+### Correcting the timeline
+
+```{r time_adjustment, echo=FALSE}
+
+timeline.period.2 <- timeline.period %>% 
+  #Years per pix
+  mutate(MYApP_orig = (earliest - latest) / (x_ef_earliest - x_ef_latest),
+         MYApP_total = (362-65)/(1250),
+         MYApP_adjust = MYApP_orig/MYApP_total)
+
+timeline.table <- timeline.period.2 %>% 
+  mutate(kYApP_orig = round(MYApP_orig * 1000, 1)) %>% 
+  mutate(`Px / Mil yrs` = round(1/MYApP_orig, 1)) %>% 
+  select(Period = period, `Period Start` = earliest,
+         `Period End` = latest,
+         `K yrs / px` = kYApP_orig,
+         `Px / Mil yrs`) %>% 
+  mutate(Period = gsub("\n", "", Period, fixed=T))
+
+knitr::kable(timeline.table)
+
+```
+
+As painted, the Jurassic and Permian periods are over-represented by almost 100% length, while the Triassic and Carboniferous / Devonian periods about half as long as they should be.
+
+What if the mural were a more accurate timeline and Zallinger painted each inch of the painting to cover `r round((time_start - time_end)/(110*12*1000))` thousand years in every period? The painting would look more like...
+
+```{r distorted, echo=FALSE, fig.height=5, fig.width=10}
+timeline.distort <- timeline.period.2 %>% 
+  select(period, MYApP_adjust)
+
+aor.distort <- aor.raw2 %>% 
+  spread(channel, value) %>% 
+  mutate(y = max(y) - y) %>% 
+  mutate(year = (362-65)/(max(x))*x + 65) %>% 
+  #TIme period, as painted
+  mutate(period = case_when(
+    year <= timeline.period$ef_earliest[1] ~ timeline.period$period[1],
+    year <= timeline.period$ef_earliest[2] ~ timeline.period$period[2], 
+    year <= timeline.period$ef_earliest[3] ~ timeline.period$period[3], 
+    year <= timeline.period$ef_earliest[4] ~ timeline.period$period[4], 
+    TRUE ~ timeline.period$period[5]
+  )) %>% 
+  left_join(timeline.distort) %>% 
+  left_join(timeline.period %>% 
+              select(period, x_earliest, x_latest)) %>% 
+  #Distort Xs
+  mutate(x_latest = ifelse(x_latest == 0, 1, x_latest)) %>% 
+  mutate(x_adj = MYApP_adjust * x) %>% 
+  group_by(period) %>% 
+  mutate(x2 = x_latest + (x_adj - min(x_adj))*(x_earliest - x_latest)/(max(x_adj) - min(x_adj))) %>% 
+  ungroup()
+
+aor.distort2 <- aor.distort %>% 
+  select(x=x2, y, R, G, B) %>% 
+  mutate(x = round(x)) %>% 
+  group_by(x, y) %>% 
+  summarize_at(vars(R, G, B), mean, na.rm=T) %>% 
+  ungroup() %>% 
+  complete(x = 1:1250, y) %>% 
+  group_by(y) %>% 
+  fill(R, G, B) %>% 
+  ungroup() %>% 
+  gather(channel, value, R, G, B) %>% 
+  mutate(value_hex = as.character(as.hexmode(round(value*255)))) %>% 
+  rowwise() %>% 
+  mutate(value_hex = ifelse(nchar(value_hex) == 1, paste0("0", value_hex), value_hex)) %>% 
+  ungroup() %>% 
+  select(-value) %>% 
+  spread(channel, value_hex) %>% 
+  rowwise() %>% 
+  mutate(color = toupper(paste0("#", R, G, B))) %>% 
+  ungroup()
+
+aor.distort3 <- aor.distort2 %>% 
+  mutate(year = (362-65)/(max(x))*x + 65) %>%   
+  mutate(period = case_when(
+    year <= timeline.period$earliest[1] ~ timeline.period$period[1],
+    year <= timeline.period$earliest[2] ~ timeline.period$period[2], 
+    year <= timeline.period$earliest[3] ~ timeline.period$period[3], 
+    year <= timeline.period$earliest[4] ~ timeline.period$period[4], 
+    TRUE ~ timeline.period$period[5]
+  ))
+
+aor.distort.x <- timeline.period %>% 
+  select(label = period, value = x_median) %>% 
+  bind_rows(timeline.period %>% 
+              select(label = earliest, value = x_earliest) %>% 
+              mutate(label = as.character(label))) %>% 
+  arrange(value)
+
+
+###
+#Merge into one files
+###
+
+aor.comp <- aor.orig %>% 
+  select(x, y, color, period) %>% 
+  mutate(Version = " Original") %>% 
+  bind_rows(aor.distort3 %>% 
+              select(x, y, color, period) %>% 
+              mutate(Version = "Corrected"))
+
+compare.vert <- timeline.period %>% 
+  select(vert = x_ef_earliest) %>% 
+  mutate(Version = " Original") %>% 
+  bind_rows(timeline.period %>% 
+              select(vert = x_earliest) %>% 
+              mutate(Version = "Corrected")) %>% 
+  filter(vert != max(vert))
+
+mya_p_pixel <- timeline.period.2 %>% 
+  select(period, MYApP_orig) %>% 
+  mutate(KYApP = MYApP_orig*1000) %>% 
+  mutate(label = paste0(round(KYApP, 0), "k yr/p")) %>% 
+  left_join(timeline.period %>% select(period, x_ef_latest)) %>% 
+  mutate(Version = " Original")
+
+ggplot(aes(x=x, y=y), 
+       data = aor.comp) +
+  geom_tile(aes(fill = color)) +
+  scale_fill_identity() +
+  scale_x_continuous(limits = c(0, 1250),
+                     breaks = c(0, aor.distort.x$value),
+                     labels = c(65, aor.distort.x$label),
+                     expand = c(0.005, 0.005),
+                     name = "Million years ago") +
+  scale_y_continuous(expand = c(0, 0)) +
+  geom_vline(data = compare.vert, aes(xintercept = vert),
+             color="white", alpha = 0.5, size=1.5) +
+  geom_label(data = mya_p_pixel, y=160,
+             aes(label = label, x = x_ef_latest+20),
+             hjust = 0, vjust=1, alpha = 0.75) +
+  labs(title = "Corrected Timeline Comparison - 238k years / pixel", 
+       subtitle = "The Age of Reptiles | Rudolph Zallinger",
+       caption = "Yale Peabody Museum | Ryan Timpe"
+  ) +
+  coord_fixed() +
+  facet_grid(Version~.) +
+  theme_bw() +
+  theme( 
+    axis.text.y = element_blank(),
+    axis.ticks.y = element_blank(),
+    axis.title.y = element_blank(),
+    axis.line.y = element_blank(),
+    axis.text.x = element_text(size = 11),
+    panel.background=element_blank(),panel.border=element_blank(),
+    panel.grid.major=element_blank(),
+    panel.grid.minor=element_blank(),plot.background=element_blank(),
+    strip.background = element_rect(fill = "#00436b"),
+    strip.text = element_text(color = "white", face = "bold", size = 12),
+    plot.title = element_text(color = "#00436b", face = "bold", size = 16),
+    plot.subtitle = element_text(color = "#00436b", size = 14),
+    plot.caption = element_text(size = 11)
+  )
+
+```
+
+I rescaled the x-coordinates by an adjustment factor for each period, then rounded each to the closest integer (I can't plot fractional pixels). For the periods that were too large, I ended up with multiple colors per pixel, which were average together. For the proportionally shorter periods in the orignal painting, this resulted in some blank pixels which were filled in using the value to their left.
+
+The bottom image in the chart distorts the original painting so that every pixel represents the same number of years. Due to the scale of the image, it is difficult to see all the detail. Below, I just render the Cretaceous and Jurassic periods for comparison.
+
+```{r distort_subset, echo=FALSE, fig.height=8, fig.width=10}
+
+ggplot(aes(x=x, y=y), 
+       data = aor.comp %>% filter(period %in% timeline.period$period[1:2])) +
+  geom_tile(aes(fill = color)) +
+  scale_fill_identity() +
+  scale_x_continuous(limits = c(0, 719),
+                     breaks = c(0, aor.distort.x$value[1:4]),
+                     labels = c(65, aor.distort.x$label[1:4]),
+                     expand = c(0.005, 0.005),
+                     name = "Million years ago") +
+  scale_y_continuous(expand = c(0, 0)) +
+  geom_vline(data = compare.vert[c(1,2,5,6), ], aes(xintercept = vert),
+             color="white", alpha = 0.5, size=1.5) +
+  geom_label(data = mya_p_pixel %>% filter(period %in% timeline.period$period[1:2]), 
+             y=160,
+             aes(label = label, x = x_ef_latest+20),
+             hjust = 0, vjust=1, alpha = 0.75) +
+  labs(title = "Corrected Timeline Comparison - 238k years / pixel \nCretaceous + Jurassic only", 
+       subtitle = "The Age of Reptiles | Rudolph Zallinger",
+       caption = "Yale Peabody Museum | Ryan Timpe"
+  ) +
+  coord_fixed() +
+  facet_grid(Version~.) +
+  theme_bw() +
+  theme( 
+    axis.text.y = element_blank(),
+    axis.ticks.y = element_blank(),
+    axis.title.y = element_blank(),
+    axis.line.y = element_blank(),
+    axis.text.x = element_text(size = 11),
+    panel.background=element_blank(),panel.border=element_blank(),
+    panel.grid.major=element_blank(),
+    panel.grid.minor=element_blank(),plot.background=element_blank(),
+    strip.background = element_rect(fill = "#00436b"),
+    strip.text = element_text(color = "white", face = "bold", size = 12),
+    plot.title = element_text(color = "#00436b", face = "bold", size = 16),
+    plot.subtitle = element_text(color = "#00436b", size = 14),
+    plot.caption = element_text(size = 11)
+  )
+
+
+```
+
+Zallinger likely painted the periods with different time scales to accomodate all of the animals he wanted to include. In the painting, Brontosaurus, the Peabody's [most famous dinosaur](https://news.yale.edu/2015/04/13/return-brontosaurus-qa-peabodys-jacques-gauthier) is prominently featured, along with other famous Jurassic dinosaurs including Allosaurus, Stegosaurus, and Archaeopteryx. This likely would not have been possible with accurately-proportioned period lengths.
+
+
+***
+
+*This is the first in a series of posts about the Age of Reptiles. [See more here.](../../../../tags/age-of-reptiles)*
+
+*These posts are a work in progress and will be edited over time.*

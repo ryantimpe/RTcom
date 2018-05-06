@@ -1,0 +1,110 @@
+---
+title: 'LEGO mosaics: Two weeks later'
+author: Ryan Timpe
+date: '2018-05-07'
+slug: LEGO-mosaic2
+categories:
+  - LEGO
+  - Data Viz
+tags:
+  - Golden Girls
+  - R
+summary: 'Updates and improvements to the tidyverse LEGO mosaic functions.'
+header: 
+  image: "posts/LEGOMosaicGG2.jpg"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, warning = FALSE, message = FALSE)
+
+library(tidyverse); library(jpeg)
+
+source("C:/Users/ryant/Documents/808Projects/Lego/0_Functions.R")
+```
+
+
+### Introduction
+
+My previous post on [building LEGO mosaics using R](../../../../2018/04/23/lego-mosaic1/) went viral with literally tens of people viewing the page, starring the [GitHub](https://github.com/ryantimpe/LEGOMosaics) repo[^Readme], or sharing their [own creations](https://twitter.com/RaoOfPhysics/status/991724781560107019) on Twitter. [David Smith](https://twitter.com/revodavid) from Microsoft's Revolutions blog even [wrote a post](http://blog.revolutionanalytics.com/2018/04/lego-sculpture.html) about it.
+
+[^Readme]: Now with a proper README.md file! `r emo::ji("yes")`
+
+In response, I've received a few emails and suggestions for improvements, so I've updated the functions in the repository with some new features.
+
+### Rectangular mosaics
+
+My original goal was to build mosaics that would fit on the standard 48-stud square base plate. Most of the user examples I have seen have used larger dimensions, so I've relaxed the square restriction in the `scale_image()` function.
+
+You can now pass an array of two values to this function, the first value specifying the brick-width of the desired mosaic and the second value specifying the height.
+
+```{r rect, echo=TRUE, eval=FALSE}
+readJPEG("LEGOMosaic/goldengirlsW.jpg") %>% 
+  scale_image(c(72, 48)) %>% #Single value for square, c(W, H) for rectangle
+  legoize() %>% 
+  collect_bricks() %>% 
+  display_set()
+```
+
+```{r rect_show, echo=FALSE, message=FALSE, warning=FALSE, fig.width=6, fig.height=4}
+# saveRDS(rect_mosaic, "LEGOMosaic/m2_wide.RDS")
+
+readRDS("LEGOMosaic/m2_wide.RDS") %>% display_set("Golden Girls wide mosaic")
+```
+
+### Stacked mosaics
+
+The default mosaics are designed to be built by placing a single layer of LEGO plates on a base plate, stud-side up. I received an email from someone who wanted a mosaic that could be built upwards, so the side of the bricks create the image.
+
+This was actually a pretty simple fix. Using `%>% collect_bricks("stacked")` narrows the brick search to just 2x1, 2x2, 2x3, and 2x4 bricks placed horizontally and staggers them - just like laying actual bricks. The charting functions then render the images with a resolution reflecting the proportions of the side of a brick.[^brick_dims]
+
+[^brick_dims]: A 1-unit LEGO brick is [not a square](https://bricks.stackexchange.com/questions/288/what-are-the-dimensions-of-a-lego-brick/295), but is taller than it is wide by a ratio of 6/5.
+
+```{r stacked, echo=TRUE, eval=FALSE}
+LEGOmosaic <- readJPEG("LEGOMosaic/goldengirls2.jpg") %>% 
+  scale_image(c(72, 48)) %>% 
+  legoize() %>% 
+  collect_bricks("stacked") 
+
+LEGOmosaic %>% display_set()
+```
+
+```{r stacked_show, echo=FALSE, message=FALSE, warning=FALSE, fig.width=6, fig.height=4}
+# saveRDS(stacked_mosaic, "LEGOMosaic/m2_stacked.RDS")
+LEGOmosaic <- readRDS("LEGOMosaic/m2_stacked.RDS") 
+
+LEGOmosaic %>% display_set("Golden Girls stacked mosaic")
+```
+
+### Piece list
+
+I've added two new functions to make it easier figure out which LEGO bricks or plates you will need to build the mosaics. The function `table_pieces()` produces a tibble of required pieces for easy printing. 
+
+```{r pieces_table, echo=TRUE}
+LEGOmosaic %>% table_pieces() %>% head() %>% knitr::kable()
+```
+
+A more fun, graphical alternative is to use `display_pieces()`. This image renders slightly differently between stacked and flat mosaics.
+
+```{r pieces, echo=TRUE, fig.width=8, fig.height=6}
+LEGOmosaic %>% display_pieces()
+```
+
+On the LEGO [Pick-a-Brick](https://shop.lego.com/en-US/Pick-a-Brick) page, you can use the Advanced Search section to filter by each color and select the number of pieces you need.
+
+### The boring parts
+
+I've made a few behind-the-scenes edits for those who use intermediate function output. Each function now returns a list object rather than a data frame. This allows the functions to pass metadata (like the stacked vs flat specification) to other functions.
+
+```{r boring, echo=TRUE}
+LEGOmosaic %>% summary() %>% knitr::kable()
+```
+
+The `generate_instructions()` function now returns a graphic rather than a data frame, no longer requiring the user to plot them manually.
+
+### Conclusion
+
+These updates to the functions should make the process of creating a LEGO mosaics a bit easier and more accessible. Next time around, I'll build a package. 
+
+***
+
+*Try it out! Full script can be found on [GitHub](https://github.com/ryantimpe/LEGOMosaics)!*

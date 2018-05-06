@@ -1,0 +1,107 @@
+---
+title: 'Data of the Age of Reptiles: Part 3 - Undercoat'
+author: Ryan Timpe
+date: '2018-01-02'
+slug: AOR-undercoat1
+categories:
+  - Dinosaurs
+  - Data Viz
+tags:
+  - Age of Reptiles
+  - R
+summary: "Reconstructing the black and white undercoat of the Age of Reptiles mural."
+header: 
+  image: "posts/AgeOfReptilesBW.jpg"
+  caption: "[**Yale Peabody Museum**](http://peabody.yale.edu/exhibits/age-reptiles-mural)"
+---
+
+
+
+<p><em>Work in Progress</em></p>
+<div id="the-undercoat" class="section level3">
+<h3>The Undercoat</h3>
+<p>Before Rudolph Zallinger painted the mural as we see it today, he painted the entire mural in “deliberately overmodeled” forms in black and white. This first coat is visible under the final colored mural, with the dark forms providing a three-dimensional effect.</p>
+<p>Am I able to reconstruct this original undermodel using this low-resolution jpeg?</p>
+</div>
+<div id="reconstructing-the-undercoat" class="section level3">
+<h3>Reconstructing the undercoat</h3>
+<p>The best image of the original undercoat I have found is a portrait of Zallinger from 1944 where he is in the process of painting the shadowy undercoat. In the photo, the painting is visible starting at the Jurassic period with details extending through the Permian. For this analysis, I began with just the Jurassic and Triassic period for easy comparison.</p>
+<div class="figure">
+<img src="../../../../post/DotAoR/AoRUndercoat2.jpg" alt="Zallinger &amp; the Age of Reptiles undercoat, 1944 Yale Peabody Museum" />
+<p class="caption">Zallinger &amp; the Age of Reptiles undercoat, 1944 <a href="http://peabody.yale.edu/">Yale Peabody Museum</a></p>
+</div>
+</div>
+<div id="grayscale" class="section level3">
+<h3>Grayscale</h3>
+<p>My first instinct to recreate the black and white undercoat was to convert the image to grayscale by assigning every color a darkness value between 0 and 1.</p>
+<p><img src="/post/2017-10-03-DotAoR-Shadow1_files/figure-html/grayscale-1.png" width="960" /></p>
+<p>With a visual comparison of this image and the photo of the undercoat, it’s clear that this is not a good approach. The skies in particular stand out to me - in the final mural, the skies are the lightest areas in the final painting, but in the undercoat the upper portion of them is almost black. In contrast, the Allosaurus and Stegosaurus have white bodies in the undercoat and are rich dark colors in the final mural.</p>
+</div>
+<div id="shading-by-intensity" class="section level3">
+<h3>Shading by intensity</h3>
+<p>The undercoat layer provides the final painting with shadows for each element of the painting (animals, plants, terrain, sky, etc.). In order to recreate this layer, I need to differentiate between the elements in the painting. One way to do this is to split the painting by shades, and then run similar analyses independently on each one.</p>
+<p><img src="/post/2017-10-03-DotAoR-Shadow1_files/figure-html/shade_groups-1.png" width="960" /></p>
+<p>To get the groups, I square the grayscale values for each cells in order to further differentiate them, then allocate each shading intensity value into quintiles.</p>
+<p>The lightest group contains mostly the skies while the darkest groups <strong>almost</strong> resemble the fauna in the undercoat. However, after a lot of trial and error, I was unable to come close to reconstructing the undercoat with this method.</p>
+</div>
+<div id="shading-by-color" class="section level3">
+<h3>Shading by color</h3>
+<p>Each object in the final mural was represented in the undercoat. I can’t (yet) easily split the mural into individual objects, however, for the most part, Zallinger used the undercoat to create various shades of the same color to paint each object. By splitting the mural into color types, I could come closer to recreating the undercoat.</p>
+<p>After a lot of tweaking values and filtering steps, I came close to recreating the undercoat.</p>
+<ul>
+<li>I rounded each RGB channel into groups of the nearest 5% intensity.</li>
+<li>I turned these RGB channel values into color groups, determined by the <em>relative intensity</em> of R, G, B.
+<ul>
+<li>How much <em>more</em> red than green is a pixel, <em>more</em> green than blue, and <em>more</em> red than blue.</li>
+<li>This grouping is important because a pixel with 100% each RGB is the same (but brighter) color as a pixel with 80% RGB.</li>
+<li>This created 88 unique color groups (not 20*20*20 = 8,000 because not all colors are in the painting.) Only 50 of these color groups are represented in more than 100 pixels.</li>
+</ul></li>
+<li>To ensure completely different colors are not grouped together (e.g. black and white), I further divided the color groups into 3 shadow groups: &gt;90% brightness, 50-90%, and &lt;50%.</li>
+<li>For each color * shadow group, only the pixels with a shadow value of at least 150% the minimum value are retained.</li>
+</ul>
+<pre class="r"><code>#Number of groups per RGB channel
+color_group_n &lt;- 20
+
+chart.uc &lt;- aor.shd.1 %&gt;% 
+  mutate(Ru = R, Gu = G, Bu = B) %&gt;% 
+  mutate_at(vars(Ru, Gu, Bu), funs(
+    ifelse(. == 1, color_group_n-1, round(.*color_group_n))
+  )) %&gt;% 
+  mutate(
+    del_RG = Ru - Gu,
+    del_RB = Ru - Bu,
+    del_GB = Gu - Bu
+  ) %&gt;% 
+  mutate(
+    color_group = paste(del_RG, del_RB, del_GB)
+  ) %&gt;% 
+  select(-dplyr::starts_with(&quot;del_&quot;)) %&gt;% 
+  mutate(shadow = ((1-R)+(1-G)+(1-B))/3) %&gt;% 
+  mutate(shadow_group = case_when(
+    shadow &lt; 0.2 ~ &quot;Light&quot;,
+    shadow &lt; 0.5 ~ &quot;Medium&quot;,
+    TRUE ~ &quot;Dark&quot;
+  )) %&gt;% 
+  group_by(color_group, shadow_group, period) %&gt;% 
+  mutate(under = shadow &gt; min(shadow)*1.5) %&gt;% 
+  ungroup() %&gt;% 
+  mutate_at(vars(R, G, B), funs(as.character(as.hexmode(.*255)))) %&gt;% 
+  mutate_at(vars(R, G, B), funs(ifelse(nchar(.) == 1, paste0(&quot;0&quot;, .), .))) %&gt;% 
+  mutate(color = toupper(paste0(&quot;#&quot;, R, G, B)))</code></pre>
+<p><img src="/post/2017-10-03-DotAoR-Shadow1_files/figure-html/undercoat_jt_chart-1.png" width="960" /></p>
+<p>These assumptions provide a rough approximation of the original undercoat. The skies are dark with bright, shadowy clouds. The bodies of all the dinosaurs are visible and the shadowing on Stegosaurus and Allosaurus closely resembles the image of the actual undercoat. The Brontosaurus neck is a bit dark, but for the most part matches the image except for the highlights.</p>
+<p>This analysis also makes the low resolution of the image I’m using for analysis more apparent.</p>
+<p>Applying these assumptions to the entire mural yields the image below.</p>
+<p><img src="/post/2017-10-03-DotAoR-Shadow1_files/figure-html/undercoat_chart-1.png" width="960" /></p>
+<p>These assumptions also perform moderately well for the Permian period, with a dark sail and white body for Edaphodaurus. I’m less impressed with the output in the Cretaceous period, but there is no original to compare it to.</p>
+</div>
+<div id="enhancing-the-undercoat-in-the-mural" class="section level3">
+<h3>Enhancing the undercoat in the mural</h3>
+<p>Finally, I wanted to see if increasing the intensity of the undercoat in the original mural would increase the “three-dimensional” effect.</p>
+<p><img src="/post/2017-10-03-DotAoR-Shadow1_files/figure-html/3d_chart-1.png" width="960" /></p>
+<p>Kinda?</p>
+<p>For now, I didn’t manage to completely reproduce the high contrast undercoat of the mural. The original image of Zallinger’s undercoat is bold and detailed, and this reconstruction looks more like a low quality newspaper print.</p>
+<hr />
+<p><em>This is the third in a series of posts about the Age of Reptiles. <a href="../../../../tags/Age-of-Reptiles">See more here.</a></em></p>
+<p><em>These posts are a work in progress and will be edited over time.</em></p>
+</div>

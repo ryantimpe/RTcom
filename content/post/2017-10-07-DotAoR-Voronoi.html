@@ -1,0 +1,67 @@
+---
+title: 'Data of the Age of Reptiles: Part 4 - Objects'
+author: Ryan Timpe
+date: '2018-01-03'
+slug: AOR-objects1
+categories:
+  - Dinosaurs
+  - Data Viz
+tags:
+  - Age of Reptiles
+  - R
+summary: "Mapping the named plants and animals in the Age of Reptiles mural."
+header: 
+  image: "posts/AgeOfReptilesVoronoi.jpg"
+  caption: "[**Yale Peabody Museum**](http://peabody.yale.edu/exhibits/age-reptiles-mural)"
+---
+
+
+
+<p><em>Work in Progress</em></p>
+<div id="the-objects" class="section level3">
+<h3>The Objects</h3>
+<p>In order to do more fun data analysis on the Age of Reptiles mural, I need to further divide the mural into its defining features - the plants and animals.</p>
+<p>I began by manually finding the x-y coordinates of the center points of each of the named objects in the mural, as well as some key background features. Each animal was designated by one point, with the exception of the Tyrannosaur and large Brontosaurus (3 points each) and the cluster of fish on the far right (one point). For the plants, each cluster was counted once. For trees, the listed point is at the center of the leaves, ignoring the trunk.</p>
+<table>
+<thead>
+<tr class="header">
+<th align="left">Object</th>
+<th align="right">Count</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td align="left">Animals</td>
+<td align="right">37</td>
+</tr>
+<tr class="even">
+<td align="left">Plants</td>
+<td align="right">40</td>
+</tr>
+<tr class="odd">
+<td align="left">Background Objects</td>
+<td align="right">15</td>
+</tr>
+</tbody>
+</table>
+<pre><code>## [1] 97</code></pre>
+<p><img src="/post/2017-10-07-DotAoR-Voronoi_files/figure-html/chart_of_points-1.png" width="960" /></p>
+<p>In the image above, red points designate named animals, green designate named plant groups, and blue designate some background areas of significant size.</p>
+</div>
+<div id="voronoi-diagram" class="section level3">
+<h3>Voronoi Diagram</h3>
+<p>Next, using these points, I construct a <a href="https://en.wikipedia.org/wiki/Voronoi_diagram">Voronoi diagram</a>. This divides the image into partitions for each named object, creating polygons containing every pixel that has the closest proximity to that point.</p>
+<p><img src="/post/2017-10-07-DotAoR-Voronoi_files/figure-html/voronoi1-1.png" width="960" /></p>
+<p>This rendering clarifies why it was necessary to provide three points for both the T.rex and Brontosaurus. With only a single point, most of the mass of the animals would be allocated to polygons centered around plants.</p>
+<p>Going a step further, I filled in the polygons by their object designation.</p>
+<p><img src="/post/2017-10-07-DotAoR-Voronoi_files/figure-html/voronoi2-1.png" width="960" /></p>
+</div>
+<div id="average-color-by-object-polygon" class="section level3">
+<h3>Average color by object polygon</h3>
+<p>In later posts, I will use the Voronoi diagram for analyses on the plants and animals in the mural without having to manually draw the outlines of each object. (Maybe one day!)</p>
+<p>For now, I can relate this back to the color post and fill each polygon with the average RGB channel the image around each center point.</p>
+<p><img src="/post/2017-10-07-DotAoR-Voronoi_files/figure-html/voronoi_color-1.png" width="960" /></p>
+<hr />
+<p><em>This is the fourth in a series of posts about the Age of Reptiles. <a href="../../../../tags/age-of-reptiles">See more here.</a></em></p>
+<p><em>These posts are a work in progress and will be edited over time.</em></p>
+</div>

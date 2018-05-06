@@ -1,0 +1,346 @@
+---
+title: 'Data of the Age of Reptiles: Part 4 - Objects'
+author: Ryan Timpe
+date: '2018-01-03'
+slug: AOR-objects1
+categories:
+  - Dinosaurs
+  - Data Viz
+tags:
+  - Age of Reptiles
+  - R
+summary: "Mapping the named plants and animals in the Age of Reptiles mural."
+header: 
+  image: "posts/AgeOfReptilesVoronoi.jpg"
+  caption: "[**Yale Peabody Museum**](http://peabody.yale.edu/exhibits/age-reptiles-mural)"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, warning = FALSE, message = FALSE)
+
+library(tidyverse)
+library(deldir); library(rgdal)
+
+aor.raw2 <- readRDS("DotAoR/AoR_DF.rds")
+timeline.period <- readRDS("DotAoR/timeline.rds")
+
+aor <- aor.raw2 %>% 
+  spread(channel, value) %>% 
+  mutate(shadow = 1 - (R+G+B)/3) %>% 
+  mutate(Rp = R, Gp = G, Bp = B) %>% 
+  mutate_at(vars(Rp, Gp, Bp), funs( as.character(as.hexmode(round(.*255))))) %>% 
+  mutate_at(vars(Rp, Gp, Bp), funs(ifelse(nchar(.) == 1, paste0("0", .), .))) %>% 
+  mutate(color = toupper(paste0("#", Rp, Gp, Bp))) %>% 
+  select(-Rp, -Gp, -Bp)
+
+chart.period <- timeline.period %>% 
+  select(label = period, value = x_ef_median) %>% 
+  bind_rows(timeline.period %>% 
+              select(label = earliest, value = x_ef_earliest) %>% 
+              mutate(label = as.character(label))) %>% 
+  arrange(value) %>% 
+  mutate(label = ifelse("Carboniferous /\n Devonian", "Devonian /\n Carboniferous", label))
+
+```
+
+*Work in Progress*  
+
+### The Objects
+
+In order to do more fun data analysis on the Age of Reptiles mural, I need to further divide the mural into its defining features - the plants and animals.
+
+I began by manually finding the x-y coordinates of the center points of each of the named objects in the mural, as well as some key background features. Each animal was designated by one point, with the exception of the Tyrannosaur and large Brontosaurus (3 points each) and the cluster of fish on the far right (one point). For the plants, each cluster was counted once. For trees, the listed point is at the center of the leaves, ignoring the trunk.
+
+
+```{r table_of_points, include = FALSE}
+
+coords_object <- readRDS("DotAoR/ObjectCoordinates.RDS")
+
+object_count <- coords_object %>% 
+  select(-x, -y) %>% 
+  distinct() %>% 
+  count(object_type) %>% 
+  mutate(object_type = case_when(
+    object_type == "fauna" ~ " Animals",
+    object_type == "flora" ~ " Plants",
+    TRUE ~ "Background Objects"
+  )) %>% 
+  arrange(object_type) %>% 
+  rename(Object = object_type, Count = n)
+
+```
+```{r table_of_points_print, echo = FALSE, results='asis'}
+knitr::kable(object_count)
+
+```
+
+```{r chart_of_points, echo = FALSE, fig.height=3, fig.width=10}
+
+####
+# Voronoi
+####
+
+aor.vor <- aor %>%  
+  mutate(y = max(y) - y) %>% 
+  mutate(year = (362-65)/(max(x))*x + 65) %>% 
+  #TIme period, as painted
+  mutate(period = case_when(
+    year <= timeline.period$ef_earliest[1] ~ timeline.period$period[1],
+    year <= timeline.period$ef_earliest[2] ~ timeline.period$period[2], 
+    year <= timeline.period$ef_earliest[3] ~ timeline.period$period[3], 
+    year <= timeline.period$ef_earliest[4] ~ timeline.period$period[4], 
+    TRUE ~ timeline.period$period[5]
+  ))
+
+vor_pts <- sp::SpatialPointsDataFrame(cbind(coords_object$x,
+                                                       coords_object$y),
+                                                 coords_object, match.ID=TRUE)
+
+SPointsDF_to_voronoi_SPolysDF <- function(sp) {
+  
+  # tile.list extracts the polygon data from the deldir computation
+  vor_desc <- tile.list(deldir(sp@coords[,1], sp@coords[,2]))
+  
+  lapply(1:(length(vor_desc)), function(i) {
+    
+    # tile.list gets us the points for the polygons but we
+    # still have to close them, hence the need for the rbind
+    tmp <- cbind(vor_desc[[i]]$x, vor_desc[[i]]$y)
+    tmp <- rbind(tmp, tmp[1,])
+    
+    # now we can make the Polygon(s)
+    Polygons(list(Polygon(tmp)), ID=i)
+    
+  }) -> vor_polygons
+  
+  # hopefully the caller passed in good metadata!
+  sp_dat <- sp@data
+  
+  # this way the IDs _should_ match up w/the data & voronoi polys
+  rownames(sp_dat) <- sapply(slot(SpatialPolygons(vor_polygons),
+                                  'polygons'),
+                             slot, 'ID')
+  
+  sp::SpatialPolygonsDataFrame(SpatialPolygons(vor_polygons),
+                           data=sp_dat)
+  
+}
+
+vor <- SPointsDF_to_voronoi_SPolysDF(vor_pts)
+vor_df <- fortify(vor) %>% 
+  rename(x = long, y = lat) %>% 
+  left_join(data.frame(id = as.character(1:nrow(coords_object)), object_type = coords_object$object_type))
+
+length(unique(vor_df$id))
+
+
+####
+# Chart
+####
+aor.orig.x <- timeline.period %>% 
+  select(label = period, value = x_ef_median) %>% 
+  bind_rows(timeline.period %>% 
+              select(label = earliest, value = x_ef_earliest) %>% 
+              mutate(label = as.character(label))) %>% 
+  arrange(value) %>% 
+  mutate(label = ifelse(label == "Carboniferous /\n Devonian", "Devonian /\n Carboniferous", label))
+
+ggplot(aes(x=x, y=y),
+       data = aor.vor) +
+  geom_tile(aes(fill = color)) +
+  scale_fill_identity() +
+  geom_point(data = coords_object, mapping = aes(x=x, y=y, color=object_type)) +
+  scale_color_manual(values = c("fauna" = "#ff4040", "flora" = "forestgreen", "background" = "#4040ff")) + 
+  # geom_map(data=vor_df, map=vor_df,
+  #          aes(x=x, y=y, map_id=id),
+  #          color="#eeeeee", fill="#FFFFFF00", size=1) +
+  scale_x_continuous(limits = c(0, 1250),
+                     breaks = c(0, aor.orig.x$value),
+                     labels = c(65, aor.orig.x$label),
+                     expand = c(0.005, 0.005),
+                     name = "Million years ago") +
+  scale_y_continuous(expand = c(0, 0), limits = c(0, max(aor$y))) +
+  geom_vline(data = timeline.period, aes(xintercept = x_ef_earliest),
+             color="white", alpha = 0.25, size=1.5) +
+  labs(title = "Center points of named objects",
+       subtitle = "The Age of Reptiles | Rudolph Zallinger",
+       caption = "Yale Peabody Museum | Ryan Timpe") +
+  coord_fixed() +
+  theme_bw() +
+  theme( 
+    axis.text.y = element_blank(),
+    axis.ticks.y = element_blank(),
+    axis.title.y = element_blank(),
+    axis.line.y = element_blank(),
+    axis.text.x = element_text(size = 11),
+    panel.background=element_blank(),panel.border=element_blank(),
+    panel.grid.major=element_blank(),
+    panel.grid.minor=element_blank(),plot.background=element_blank(),
+    strip.background = element_rect(fill = "#00436b"),
+    strip.text = element_text(color = "white", face = "bold", size = 12),
+    plot.title = element_text(color = "#00436b", face = "bold", size = 16),
+    plot.subtitle = element_text(color = "#00436b", size = 14),
+    plot.caption = element_text(size = 11),
+    legend.position = "none"
+  )
+
+```
+
+In the image above, red points designate named animals, green designate named plant groups, and blue designate some background areas of significant size.
+
+### Voronoi Diagram
+
+Next, using these points, I construct a [Voronoi diagram](https://en.wikipedia.org/wiki/Voronoi_diagram). This divides the image into partitions for each named object, creating polygons containing every pixel that has the closest proximity to that point.
+
+```{r voronoi1, echo = FALSE, fig.height=3, fig.width=10}
+
+ggplot(aes(x=x, y=y),
+       data = aor.vor) +
+  geom_tile(aes(fill = color)) +
+  scale_fill_identity() +
+  geom_point(data = coords_object, mapping = aes(x=x, y=y, color=object_type)) +
+  scale_color_manual(values = c("fauna" = "#ff4040", "flora" = "forestgreen", "background" = "#4040ff")) + 
+  geom_map(data=vor_df, map=vor_df,
+           aes(x=x, y=y, map_id=id),
+           color="#eeeeee", fill="#FFFFFF00", size=1) +
+  scale_x_continuous(limits = c(0, 1250),
+                     breaks = c(0, aor.orig.x$value),
+                     labels = c(65, aor.orig.x$label),
+                     expand = c(0.005, 0.005),
+                     name = "Million years ago") +
+  scale_y_continuous(expand = c(0, 0), limits = c(0, max(aor$y))) +
+  geom_vline(data = timeline.period, aes(xintercept = x_ef_earliest),
+             color="white", alpha = 0.25, size=1.5) +
+  labs(title = "Voronoi diagram of named objects",
+       subtitle = "The Age of Reptiles | Rudolph Zallinger",
+       caption = "Yale Peabody Museum | Ryan Timpe") +
+  coord_fixed() +
+  theme_bw() +
+  theme( 
+    axis.text.y = element_blank(),
+    axis.ticks.y = element_blank(),
+    axis.title.y = element_blank(),
+    axis.line.y = element_blank(),
+    axis.text.x = element_text(size = 11),
+    panel.background=element_blank(),panel.border=element_blank(),
+    panel.grid.major=element_blank(),
+    panel.grid.minor=element_blank(),plot.background=element_blank(),
+    strip.background = element_rect(fill = "#00436b"),
+    strip.text = element_text(color = "white", face = "bold", size = 12),
+    plot.title = element_text(color = "#00436b", face = "bold", size = 16),
+    plot.subtitle = element_text(color = "#00436b", size = 14),
+    plot.caption = element_text(size = 11),
+    legend.position = "none"
+  )
+
+```
+
+This rendering clarifies why it was necessary to provide three points for both the T.rex and Brontosaurus. With only a single point, most of the mass of the animals would be allocated to polygons centered around plants.
+
+Going a step further, I filled in the polygons by their object designation.
+
+```{r voronoi2, echo = FALSE, fig.height=3, fig.width=10}
+
+ggplot(aes(x=x, y=y),
+       data = aor.vor) +
+  geom_tile(aes(alpha = shadow), fill = "black") +
+  scale_alpha_identity() +
+  geom_map(data=vor_df, map=vor_df,
+           aes(x=x, y=y, map_id=id, fill = object_type),
+           color="#eeeeee", size=1, alpha = 0.4) +
+  scale_fill_manual(values = c("fauna" = "#ff4040", "flora" = "forestgreen", "background" = "#4040ff")) + 
+  scale_x_continuous(limits = c(0, 1250),
+                     breaks = c(0, aor.orig.x$value),
+                     labels = c(65, aor.orig.x$label),
+                     expand = c(0.005, 0.005),
+                     name = "Million years ago") +
+  scale_y_continuous(expand = c(0, 0), limits = c(0, max(aor$y))) +
+  geom_vline(data = timeline.period, aes(xintercept = x_ef_earliest),
+             color="white", alpha = 0.25, size=1.5) +
+  labs(title = "Voronoi diagram of named objects by type",
+       subtitle = "The Age of Reptiles | Rudolph Zallinger",
+       caption = "Yale Peabody Museum | Ryan Timpe") +
+  coord_fixed() +
+  theme_bw() +
+  theme( 
+    axis.text.y = element_blank(),
+    axis.ticks.y = element_blank(),
+    axis.title.y = element_blank(),
+    axis.line.y = element_blank(),
+    axis.text.x = element_text(size = 11),
+    panel.background=element_blank(),panel.border=element_blank(),
+    panel.grid.major=element_blank(),
+    panel.grid.minor=element_blank(),plot.background=element_blank(),
+    strip.background = element_rect(fill = "#00436b"),
+    strip.text = element_text(color = "white", face = "bold", size = 12),
+    plot.title = element_text(color = "#00436b", face = "bold", size = 16),
+    plot.subtitle = element_text(color = "#00436b", size = 14),
+    plot.caption = element_text(size = 11),
+    legend.position = "none"
+  )
+
+```
+
+### Average color by object polygon
+
+In later posts, I will use the Voronoi diagram for analyses on the plants and animals in the mural without having to manually draw the outlines of each object. (Maybe one day!)
+
+For now, I can relate this back to the color post and fill each polygon with the average RGB channel the image around each center point.
+
+```{r voronoi_color, echo = FALSE, fig.height=3, fig.width=10}
+aor.poly2 <- readRDS("DotAoR/AoR_Voronoi.RDS")
+
+aor.poly.color <- aor.poly2 %>% 
+  group_by(id) %>% 
+  summarize_at(vars(R, G, B), mean) %>% 
+  mutate_at(vars(R, G, B), funs( as.character(as.hexmode(round(.*255))))) %>% 
+  mutate_at(vars(R, G, B), funs(ifelse(nchar(.) == 1, paste0("0", .), .))) %>% 
+  mutate(color_poly = toupper(paste0("#", R, G, B))) %>% 
+  select(-R, -G, -B)
+
+ggplot(aes(x=x, y=y),
+       data = aor.vor) +
+  geom_tile(aes(alpha = shadow), fill = "black") +
+  scale_alpha_identity() +
+  geom_map(data=vor_df %>% left_join(aor.poly.color), 
+           map=vor_df %>% left_join(aor.poly.color),
+           aes(x=x, y=y, map_id=id, fill = color_poly),
+           color="#eeeeee", alpha = .9, size=1) +
+  scale_fill_identity() +
+  scale_x_continuous(limits = c(0, 1250),
+                     breaks = c(0, aor.orig.x$value),
+                     labels = c(65, aor.orig.x$label),
+                     expand = c(0.005, 0.005),
+                     name = "Million years ago") +
+  scale_y_continuous(expand = c(0, 0), limits = c(0, max(aor$y))) +
+  geom_vline(data = timeline.period, aes(xintercept = x_ef_earliest),
+             color="white", alpha = 0.25, size=1.5) +
+  labs(title = "Object polygons by avergae color",
+       subtitle = "The Age of Reptiles | Rudolph Zallinger",
+       caption = "Yale Peabody Museum | Ryan Timpe") +
+  coord_fixed() +
+  theme_bw() +
+  theme( 
+    axis.text.y = element_blank(),
+    axis.ticks.y = element_blank(),
+    axis.title.y = element_blank(),
+    axis.line.y = element_blank(),
+    axis.text.x = element_text(size = 11),
+    panel.background=element_blank(),panel.border=element_blank(),
+    panel.grid.major=element_blank(),
+    panel.grid.minor=element_blank(),plot.background=element_blank(),
+    strip.background = element_rect(fill = "#00436b"),
+    strip.text = element_text(color = "white", face = "bold", size = 12),
+    plot.title = element_text(color = "#00436b", face = "bold", size = 16),
+    plot.subtitle = element_text(color = "#00436b", size = 14),
+    plot.caption = element_text(size = 11),
+    legend.position = "none"
+  )
+
+```
+
+***
+
+*This is the fourth in a series of posts about the Age of Reptiles. [See more here.](../../../../tags/age-of-reptiles)*
+
+*These posts are a work in progress and will be edited over time.*

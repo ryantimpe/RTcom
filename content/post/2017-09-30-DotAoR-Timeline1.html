@@ -1,0 +1,106 @@
+---
+title: 'Data of the Age of Reptiles: Part 1 - The Timeline'
+author: Ryan Timpe
+date: '2017-12-20'
+slug: AOR-timeline1
+categories:
+  - Dinosaurs
+  - Data Viz
+tags:
+  - Age of Reptiles
+  - R
+summary: 'Introduction to the Data of the Age of Reptiles series of post. Analysis of the timeline represented in the mural.'
+header: 
+  image: "posts/AgeOfReptiles.jpg"
+  caption: "[**Yale Peabody Museum**](http://peabody.yale.edu/exhibits/age-reptiles-mural)"
+---
+
+
+
+<p><em>Work in Progress</em></p>
+<div id="introduction" class="section level3">
+<h3>Introduction</h3>
+<p>The Great Hall of the Yale Peabody Museum is home to one of the world’s largest scientifically accurate* natual history murals. The <a href="http://peabody.yale.edu/exhibits/age-reptiles-mural">Age of Reptiles</a> mural, painted by Rudolph Zallinger from 1942-47, spans a 110ft wall in the hall and depicts the museum’s specimens as they might have looked when alive.</p>
+<p>Even after 4 years of volunteering, I still discover new details in the painting each time I visit. I have read the <a href="https://www.amazon.com/Age-Reptiles-Science-Zallingers-Dinosaur/dp/0912532769/">book about the mural</a> (and the <a href="https://www.amazon.com/House-Lost-Worlds-Dinosaurs-Dynasties/dp/0300226926/">book about the Peabody</a>), but I still have questions about the art and science behinds Zallinger’s work.</p>
+<p>I’m not a paleobiologist or an artist, but I hope to use my skills as a data scientist to answer some of the questions I have asked myself over the past few years.</p>
+<p>* Scientifically accurate in the 1940s… maybe.</p>
+</div>
+<div id="the-data" class="section level3">
+<h3>The Data</h3>
+<p>A jpeg image of the Age of Reptiles mural (or any image) is a dataset with five dimensions: x- &amp; y-cooridates and red, green, and blue light channels. Using R, I converted the jpeg with resolution (1250*167) to a dataframe of 626k total values to proceed with the analysis.</p>
+</div>
+<div id="a-timeline" class="section level3">
+<h3>A Timeline?</h3>
+<p>The mural is a timeline, spanning five geological periods between 65 milllion and 362 million years ago. Zallinger splits the mural into these periods using large trees spanning the height of the mural.</p>
+<p>Many of my questions about the mural include breakdowns by these five periods, so my first processing task was to convert the 1250 horizontal pixels into years, and then grouping them by the start/end dates of the geological periods.</p>
+<pre class="r"><code>length_x &lt;- 1250
+time_start &lt;- 362*10^6
+time_end &lt;- 65*10^6
+
+k_years_per_px &lt;- round((time_start - time_end)/(length_x * 1000))</code></pre>
+<p>On average, if the Age of Reptiles mural were a true timeline, it would cover an impressive 238 thousand years in each pixel. In the 110ft long actual painting, each inch of paint would cover 225 thousand years.</p>
+<p>Cutting those pixels into the geological periods and overlaying them on the painting results in the image below:</p>
+<p><img src="/post/2017-09-30-DotAoR-Timeline1_files/figure-html/orig_w_constanttime-1.png" width="960" /></p>
+<p>These calculated period boundaries (the white lines) do not overlap with the painted boundaries (large trees). The calculated Cretaceous/Jurassic boundary is slightly to the right of the tree divider. The calculated Jurassic/Triassic boundary splices the head of an Allosaurus, while the boundary tree is far closer to the Permian period.</p>
+</div>
+<div id="correcting-the-timeline" class="section level3">
+<h3>Correcting the timeline</h3>
+<table>
+<thead>
+<tr class="header">
+<th align="left">Period</th>
+<th align="right">Period Start</th>
+<th align="right">Period End</th>
+<th align="right">K yrs / px</th>
+<th align="right">Px / Mil yrs</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td align="left">Cretaceous</td>
+<td align="right">144</td>
+<td align="right">65</td>
+<td align="right">257.1</td>
+<td align="right">3.9</td>
+</tr>
+<tr class="even">
+<td align="left">Jurassic</td>
+<td align="right">206</td>
+<td align="right">144</td>
+<td align="right">150.3</td>
+<td align="right">6.7</td>
+</tr>
+<tr class="odd">
+<td align="left">Triassic</td>
+<td align="right">248</td>
+<td align="right">206</td>
+<td align="right">356.4</td>
+<td align="right">2.8</td>
+</tr>
+<tr class="even">
+<td align="left">Permian</td>
+<td align="right">290</td>
+<td align="right">248</td>
+<td align="right">163.6</td>
+<td align="right">6.1</td>
+</tr>
+<tr class="odd">
+<td align="left">Carboniferous / Devonian</td>
+<td align="right">362</td>
+<td align="right">290</td>
+<td align="right">462.4</td>
+<td align="right">2.2</td>
+</tr>
+</tbody>
+</table>
+<p>As painted, the Jurassic and Permian periods are over-represented by almost 100% length, while the Triassic and Carboniferous / Devonian periods about half as long as they should be.</p>
+<p>What if the mural were a more accurate timeline and Zallinger painted each inch of the painting to cover 225 thousand years in every period? The painting would look more like…</p>
+<p><img src="/post/2017-09-30-DotAoR-Timeline1_files/figure-html/distorted-1.png" width="960" /></p>
+<p>I rescaled the x-coordinates by an adjustment factor for each period, then rounded each to the closest integer (I can’t plot fractional pixels). For the periods that were too large, I ended up with multiple colors per pixel, which were average together. For the proportionally shorter periods in the orignal painting, this resulted in some blank pixels which were filled in using the value to their left.</p>
+<p>The bottom image in the chart distorts the original painting so that every pixel represents the same number of years. Due to the scale of the image, it is difficult to see all the detail. Below, I just render the Cretaceous and Jurassic periods for comparison.</p>
+<p><img src="/post/2017-09-30-DotAoR-Timeline1_files/figure-html/distort_subset-1.png" width="960" /></p>
+<p>Zallinger likely painted the periods with different time scales to accomodate all of the animals he wanted to include. In the painting, Brontosaurus, the Peabody’s <a href="https://news.yale.edu/2015/04/13/return-brontosaurus-qa-peabodys-jacques-gauthier">most famous dinosaur</a> is prominently featured, along with other famous Jurassic dinosaurs including Allosaurus, Stegosaurus, and Archaeopteryx. This likely would not have been possible with accurately-proportioned period lengths.</p>
+<hr />
+<p><em>This is the first in a series of posts about the Age of Reptiles. <a href="../../../../tags/age-of-reptiles">See more here.</a></em></p>
+<p><em>These posts are a work in progress and will be edited over time.</em></p>
+</div>
