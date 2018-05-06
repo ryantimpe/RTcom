@@ -1,0 +1,119 @@
+baseurl = "/"
+languageCode = "en-us"
+title = "Ryan Timpe"
+copyright = "&copy; 2017 Ryan Timpe"
+theme = "hugo-academic"
+enableEmoji = true
+googleAnalytics = "UA-8484302-1"
+disqusShortname = ""
+ignoreFiles = ["\\.Rmd$", "\\.Rmarkdown$", "_files$", "_cache$"]
+custom_css = "rtcom.css"
+
+[blackfriday]
+  hrefTargetBlank = true
+  
+[permalinks]
+    post = "/:year/:month/:day/:slug/"
+    
+[params]
+  name = "Ryan Timpe"
+  role = "Data Science | Economics | Statistics"
+  organization = ""
+  organization_url = ""
+  gravatar = false  # Get your avatar from Gravatar.com? (true/false)
+  avatar = "RyBob.jpg"  # Specify an avatar image (in `static/img/` folder) or delete value to disable avatar.
+  email = "ryan.timpe@gmail.com"
+  address = "New Haven, CT"
+  office_hours = ""
+  phone = "781 467 8744"
+  skype = ""
+  telegram = ""
+
+  # Enable Keybase in Contact section by entering your keybase.io username.
+  keybase = ""
+
+  # Date format (refer to Go's date format: http://flippinggodateformat.com )
+  #   Examples: "Mon, Jan 2, 2006" or "2006-01-02"
+  date_format = "Jan 2, 2006"
+
+  # Enable global LaTeX math rendering?
+  #   If false, you can enable it locally on a per page basis.
+  math = false
+
+[[params.social]]
+  icon = "envelope"
+  icon_pack = "fa"
+  link = "mailto:ryantimpe@gmail.com"
+
+[[params.social]]
+  icon = "twitter"
+  icon_pack = "fa"
+  link = "//twitter.com/ryantimpe"
+  
+[[params.social]]
+  icon = "instagram"
+  icon_pack = "fa"
+  link = "//instagram.com/ryantimpe"
+
+[[params.social]]
+  icon = "github"
+  icon_pack = "fa"
+  link = "//github.com/ryantimpe"
+  
+[[params.social]]
+  icon = "linkedin"
+  icon_pack = "fa"
+  link = "//linkedin.com/in/ryantimpe"
+  
+  
+[[menu.main]]
+  name = "Home"
+  url = "#about"
+  weight = 1
+
+[[menu.main]]
+  name = "Experience"
+  url = "#experience"
+  weight = 2
+
+[[menu.main]]
+  name = "Volunteer"
+  url = "#volunteer"
+  weight = 3
+
+[[menu.main]]
+  name = "Projects"
+  url = "#projects"
+  weight = 4
+  
+[[menu.main]]
+  name = "Posts"
+  url = "#posts"
+  weight = 5
+
+[[menu.main]]
+  name = "Contact"
+  url = "#contact"
+  weight = 6
+
+    # options for highlight.js (version, additional languages, and theme)
+    highlightjsVersion = "9.11.0"
+    highlightjsCDN = "//cdn.bootcss.com"
+    highlightjsLang = ["r", "yaml"]
+    highlightjsTheme = "github"
+
+    MathJaxCDN = "//cdn.bootcss.com"
+    MathJaxVersion = "2.7.1"
+
+    [params.logo]
+    url = "logo.png"
+    width = 50
+    height = 50
+    alt = "Logo"
+    
+# Taxonomies.
+[taxonomies]
+  tag = "tags"
+  category = "categories"
+  publication_type = "publication_types"
+
