@@ -31,6 +31,6 @@ weight = 1
  
 +++
 
-I am a data scientist at a market sizing and forecasting consulting firm, helping our clients in the technology industry find new ways to use data to make better decisions. 
+I am a data scientist at a market sizing and forecasting consulting firm, helping our clients in the technology industry find new ways to use data to make better decisions.
 
 I also enjoy building analytics tools in R and creating projects with dinosaur and pop culture data. Scroll down for a few examples!

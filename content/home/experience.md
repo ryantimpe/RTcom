@@ -19,8 +19,7 @@ weight = 5
 **Current**  
 Principal Consultant at [**International Planning & Research**](http://www.iprcorp.com) in New Haven, CT and Boston, MA since June 2009.
 <ul class = "experience">
-<li>I use my background in econometrics to build forecasting and market sizing models for clients in the IT industry. I deliver those results in executive-level presentations and interactive simulators. In my downtime, I create tools in R, Shiny, and Excel to help improve analyst efficiency and productivity company-wide.
-<li>See some examples below, including the R packages ipfitr and RSPivot.
+<li>I use my background in econometrics to build forecasting and market sizing models for clients in the IT industry. I deliver those results in executive-level presentations and interactive simulators. In my downtime, I create R packages, as well as tools in Shiny and Excel, to help improve analyst efficiency and productivity company-wide.
 </ul>
 
 **Previous**  
