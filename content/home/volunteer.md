@@ -15,8 +15,10 @@ weight = 6
 +++
 Docent at [**Yale Peabody Museum**](http://peabody.yale.edu/) in New Haven, CT since March 2014.
 <ul class = "experience">
-<li>I lead weekend highlights tours covering the Peabody's dinosaur, mammal, mineral, and Egypt collections.
+<li>I lead weekend highlights tours covering the Peabody's dinosaur, mammal, mineral, and Egypt collections. I've written two specialty tours, including one about the Peabody Museum's connection with the [dinosaurs featured in Jurassic Park](../../files/Peabody Jurassic Park Tour - June 2018.pdf).
 
-I've also served as President of the Associates Council, where I helped to develop new programs to improve the museum's community outreach.
+<li><img src="(../../img/RyYPM.jpg" alt="Tour action shot" width="300">
+
+<li>I have also served as President and Vice President of the Associates Council, where I helped to develop new programs to improve community and visitor outreach at the museum.
+
 </ul>
-
