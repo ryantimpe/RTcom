@@ -1,0 +1,560 @@
+---
+title: 'Using data science tools to understand museum visitor engagement'
+author: Ryan Timpe
+date: '2018-07-30'
+slug: Peabody-insta1
+categories:
+  - Peabody Museum
+  - Data Viz
+tags:
+  - Age of Reptiles
+  - R
+summary: 'Image analysis of Instagram posts at the Yale Peabody Museum using Google Cloud Vision AI, clustering, and principal components.'
+header: 
+  image: "posts/PeabodyInsta1.jpg"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE, warning=FALSE, message=FALSE)
+
+set.seed(12334)
+
+#Libraries for analysis 
+library(tidyverse); library(tidytext)
+
+#PCA libraries 
+library(scales); library(irlba);
+library(broom)
+
+#Tables
+options(knitr.table.format = "html") 
+options(kableExtra.auto_format = FALSE)
+library(kableExtra)
+
+#Data from processing
+img_pro2       <- readRDS("PeabodyInsta/Post1/pro_data.RDS")%>% 
+  mutate(ID_ymd_hms = lubridate::ymd_hms(paste0(substr(ID, 1, 13), ":", substr(ID, 15, 16), ":", substr(ID, 18, 19))))
+
+clust_cld2     <- readRDS("PeabodyInsta/Post1/pro_cluster.RDS")
+pca_labels     <- readRDS("PeabodyInsta/Post1/pro_pca_labels.RDS")
+
+img_pca_scaled <- readRDS("PeabodyInsta/Post1/pro_pca.RDS")
+img_pca_pca <- readRDS("PeabodyInsta/Post1/pro_pca_pca.RDS")
+
+img_tidied_pca <- bind_cols(Tag = colnames(img_pca_scaled),
+                        tidy(img_pca_pca$rotation)) %>%
+  gather(PC, Contribution, PC1:PC20)
+
+augmented_pca <- bind_cols(ID = rownames(img_pca_scaled),
+                           tidy(img_pca_pca$x)) %>% 
+  left_join(img_pro2 %>% select(ID, cluster, cluster_name, cluster_size)) %>%
+  select(ID, cluster, cluster_name, cluster_size, everything())
+```
+
+```{r setup_fn, include=FALSE}
+collapse_transformer <- function(regex = "[*]$", ...) {
+  function(text, envir) {
+    if (grepl(regex, text)) {
+        text <- sub(regex, "", text)
+    }
+    res <- eval(parse(text = text, keep.source = FALSE), envir)
+    glue_collapse(res, ...)
+  }
+}
+
+paste_wordlist <- function(word_list){
+   paste(c(paste(word_list[1:(length(word_list)-1)], collapse = ", "), 
+           word_list[length(word_list)]), collapse = ", and ")
+}
+
+paste_pca_labels <- function(row, df = pca_labels){
+  dat <- df[row, ]
+  paste(df[row, 2:3], collapse = " vs. ")
+}
+
+paste_pca_chart <- function(row, side = "pos", dir = "left", df = pca_labels){
+  coll <- if(side == "pos"){3}else{2}
+  paste((if(dir == "left"){"<< "}),
+        df[row, coll],
+        if(dir == "right"){" >>"})
+}
+
+gg_color_hue <- function(n) {
+  hues = seq(15, 375, length = n + 1)
+  hcl(h = hues, l = 65, c = 100)[1:n]
+}
+
+```
+
+# Introduction
+
+The Yale Peabody Museum was designed and constructed in the 1920's - a time when the best way visitors could share their experience with others was a postcard from the gift shop[^giftshop]. In the 100 years since then, technology has evolved and visitors have changed how they engage with the museum and others; smartphones, photos, and selfies are now a common feature of the modern museum visit. 
+
+[^giftshop]: I actually have no clue if the Peabody Museum had a gift shop in 1926.
+
+Though the exhibits are understandably slow to adapt to ever-changing technology[^steg], museums can update their public programs offerings to react to changing visitor behavior. Museums should understand how visitors engage (or not engage) with the exhibits and specimens throughout the halls and curate the programs to better relate to the guests. In turn, visitors will have a more positive museum experience, which can translate into return trips, increased revenue, and new guests.
+
+[^steg]: The Stegosaurus skeleton in the center of the Great Hall has had the incorrect number of tail spikes since 1926. `r emo::ji("shrug")`
+
+In order to update museum offerings to reflect the changing habits of visitors, it's imperative to understand those habits. Many visitors share their experiences on social media platform. These social media posts capture how visitors interact with museum exhibits through their phones, providing insights into what visitors do when they aren't reading signage or engaging with museum staff and volunteers. With a better understanding of how guests interact inside the walls, museums can improve events, exhibits, and marketing to further encourage this behavior. After all, each positive social media post at the museum is a free advertisement for the Peabody.
+
+*Note: I'm not a Peabody Museum employee, just a fan.*
+
+## The Goal
+
+Using public Instagram posts tagged at the museum, can we **understand how visitors engage with Yale Peabody Museum exhibits through their smartphones and social media?**
+
+# The Data
+
+I look at public Instagram posts tagged at the Yale Peabody Museum. Each Instagram post comes with 4 key pieces of information we can leverage about the guests' experiences:
+
+  1. Image
+  2. Date & time of the post
+  3. Caption / description
+  4. Hashtags
+  
+For this post, I will primarily use the content of the images in each of these Instagram posts[^color]. One way to do this is to visually inspect each Instagram image and manually create notes. However, with `r nrow(img_pro2) %>% prettyNum(big.mark=",")` images tagged at the Peabody, human review is not possible. Rather, for this analysis, I take advantage of another area of rapidly evolving technology - artificial intelligence. [Google Cloud Vision](https://cloud.google.com/vision/) is a service that can examine a photo and label the objects identified in them.
+
+[^color]: There are many routes to extracting data from an image. One option is to study the [dominant colors](http://www.ryantimpe.com/2017/12/24/aor-color1/) in the images, but this might not help us understand visitor engagement. 
+
+Below is an example of the Cloud Vision output for an image of Deinonychus in the foreground of the Age of Reptiles mural in the Great Hall.
+
+![Google Cloud Vision Example](/img/CV_example.jpg){width=600px}
+
+The AI recognizes with the most confidence that it is looking at an image of dinosaurs, perhaps T. rex and Velociraptor. The tool also identifies a tree, which will be valuable later for differentiating between fossil dinosaurs and painted dinosaurs in the Age of Reptiles mural.
+
+Using the Cloud Visions API and [tools in R](https://github.com/cloudyr/RoogleVision), I found image labels for each of the Instagram posts.
+    
+## Selection bias
+
+We need to be cautious about using the observations of Instagram posts to make conclusions about museum experience for all visitors. Only a small subset of museum guests use Instagram - teens, young adults, and parents are probably more inclined to use the platform than school children and older adults. From there, not all users select the Peabody Museum location tag with the post, meaning I have not collected every Instagram post from the museum[^ss]. 
+
+[^ss]: My guess is that this reduces the sample size of the analysis, but likely does not reflect differences in motivation or photo content.
+
+Conversely, some Instagram users post photos listing the Peabody Museum as the location, though the photo was not taken at or around the museum (there are a few super strange photos from this subset of people). For the most part, this error is small. We can use some of the tools later in the analysis to identify these images.
+
+```{r selection_bias, echo=FALSE, message=FALSE, warning=FALSE, fig.width= 6.5, fig.height=2.75}
+ggplot() +
+  geom_polygon(aes(x=c(1, 1, 4, 4), 
+                   y=c(4, 0, 0, 4)), color = "black", fill = "#00436b", alpha = 1) +
+  geom_polygon(aes(x=c(2, 2, 4, 4), 
+                   y=c(3, 0, 0, 3)), color = "black", fill = "#33769f", alpha = 1) +
+  geom_polygon(aes(x=c(2.5, 2.5, 4, 4), 
+                   y=c(2, -0.25, -0.25, 2)), color = "black", fill = "#FFFF00", alpha = 0.5,
+               linetype = "dashed") +
+  geom_polygon(aes(x=c(1, 1, 4, 4), 
+                   y=c(4, 0, 0, 4)), color = "black", fill = "#FFFFFF", alpha = 0) +
+  geom_polygon(aes(x=c(2.5, 2.5, 4, 4), 
+                   y=c(2,0, 0, 2)), color = "black", fill = "#FFFFFF", alpha = 0) +
+  annotate("text", x=1.1, y=3.8, color = "white",
+           label = "Peabody Museum visitors...", hjust = 0, fontface=2) +
+  annotate("text", x=2.1, y=2.8, color = "white",
+           label = "...who use Instagram...", hjust = 0, fontface=2) +
+  annotate("text", x=2.6, y=1.8, label = "...and tag location", hjust = 0, fontface=2) +
+  annotate("text", x=4.1, y=0.15, label = "      Tag location\n << but not at museum", hjust = 0) +
+  labs(title = "Understanding Instagram post selection bias") + 
+  coord_cartesian(xlim = c(1, 5.5)) +
+  theme_void()
+
+```
+
+The goal is to use the visitors in the **yellow box** to understand the behavior of the visitors in the **light blue** box, the museum guests who interact with the exhibits using their smartphones and social media. We won't have enough information to understand the behavior of visitors in the darker blue box.
+
+# The Analysis 
+
+## Most common labels
+
+Google Cloud Vision AI identified between 5 and 10 labels for each of the photos. A cursory overview of the labels shows that the AI can identify popular dinosaurs, animals, and minerals, but for the most part, the image labels are more general descriptors.
+
+Below are the most common labels across all images.
+
+```{r common_labels, fig.width=5, fig.height=6}
+common_labels <- img_pro2 %>% 
+  filter(!is.na(cluster)) %>% 
+  select(-CloudLogo, -Tags) %>% 
+  unnest(CloudVision) %>% 
+  select(-mid, -topicality, -error) %>% 
+  group_by(ID) %>% 
+  top_n(6, score) %>% 
+  ungroup() %>% 
+  # inner_join(img_cld %>% select(description)) %>% 
+  complete(nesting(ID, ID_ymd_hms, cluster, cluster_size, cluster_name), description, fill = list(score = 0))
+
+num_labels <- img_pro2 %>% 
+  filter(!is.na(cluster)) %>% 
+  select(-CloudLogo, -Tags) %>% 
+  unnest(CloudVision) %>% 
+  select(description) %>% 
+  distinct() %>% 
+  nrow()
+
+common_labels %>%
+  group_by(Tag = description) %>%
+  summarise(Value = mean(score)) %>%
+  arrange(desc(Value)) %>%
+  top_n(15) %>%
+  mutate(Tag = reorder(Tag, Value)) %>%
+  ggplot(aes(Tag, Value, label = Tag, fill = Tag)) +
+  geom_col(alpha = 0.9, show.legend = FALSE) +
+  # scale_fill_manual(values =  c(rep("#416825", 5), rep("#33769f", 5), rep("#00436b", 5))) +
+  scale_fill_discrete( h = c(60, 202), l = seq(50, 21, length.out = 15)) +
+  geom_text(aes(Tag, 0.001), hjust = 0,
+            color = "white", size = 4, fontface = 2) +
+  coord_flip() +
+  labs(title = "Top 15 image labels in Instagram posts",
+       subtitle = "Location tag: Yale Peabody Museum",
+       caption = "Ryan Timpe .com",
+    x = NULL, y = "% of images with label") +
+  scale_y_continuous(labels = percent_format(), expand = c(0.015,0)) +
+  theme_minimal()+
+  theme(axis.text.y=element_blank(),
+        axis.ticks.y =element_blank(),
+        axis.text = element_text(color = "black"),
+        axis.title = element_text(face = "bold"))
+```
+
+This table alone immediately provides us with some information about how visitors are interacting with the museum on social media. 'Dinosaur', 'mineral', and 'fauna', which describe the three main exhibits at the Peabody Museum, are some of the most common image labels. 'Sculpture' and 'statue' refer to the Torosaurus statue and other smaller exhibits, and 'Tyrannosaurus' and 'tree' refer to the Age of Reptiles mural. The tag 'fun' shows up in 5% of images, which upon visual inspection, is associated with smiling people and events.
+
+# Image grouping
+
+The Cloud Vision AI identified `r num_labels %>% prettyNum(big.mark=",")` labels across all images, meaning we have over a thousand ways to describe each of the `r nrow(img_pro2) %>% prettyNum(big.mark=",")` Instagram posts. In order to interpret this data beyond simple label counting, we can use some more sophisticated data science tools.
+
+## Clustering
+
+The first tool is an algorithm called "clustering", which looks at the labels associated with each photo and groups the similar Instagram posts together. A simple example of clustering is a map of the world, with two dimensions: longitude and latitude. The U.S., Canada, and Mexico are clustered in 'North America' while Italy, Germany, and France are clustered in 'Europe'.
+
+Cluster analysis of the Instagram posts at the Peabody Museum works the same way, but with `r num_labels %>% prettyNum(big.mark=",")` dimensions instead of two. This analysis is able to separate the Instagram image labels into 10 unique groups. From there, I examine the labels associated with each group and translate them into categories relevant to the museum. For example, one group contains the labels `r paste_wordlist(pull(clust_cld2[1:5, 8]))`, which likely describe photos taken in the David Friend Hall. Another group has the labels `r paste_wordlist(pull(clust_cld2[1:5, 7]))`, suggesting these photos were taken the Great Hall[^unclustered].
+
+[^unclustered]: `r nrow(img_pro2) - nrow(augmented_pca)` Instagram photos are not assigned a cluster as Google Cloud Vision is unable to identify labels. Some of these images are relevant to this analysis, but the AI is not strong enough to identify the contents. One example is my photo of [insects trapped in amber](https://www.instagram.com/p/BkX499bAHa2/?taken-by=ryantimpe), which ideally would be labeled as mineral and insects.
+
+The human curation of the labels is important to add context to the cluster results. A person familiar with the layout of the Peabody Museum would immediately be able to recognize the importance of most of these image labels and assign them to different exhibits or locations in the museum. The table below lists the clusters as I've named them, along with the percent share of Instagram posts that belong to each one.
+
+```{r clusters, echo=FALSE, warning=FALSE, message=FALSE, fig.height=2}
+cluster_table <- img_pro2 %>% 
+  count(cluster_name) %>% 
+  mutate(Share = paste0(round(n/sum(n), 2)*100, "%")) %>% 
+  arrange(desc(n)) %>% 
+  select(-n) %>% 
+  rename(Cluster = cluster_name)
+
+cluster_table2 <- cluster_table[1:5,] %>% 
+  mutate(` ` = "     ") %>% 
+  bind_cols(cluster_table[6:10, ] %>% 
+              rename(`Cluster ` = Cluster, `Share ` = Share))
+
+cluster_table2 %>% 
+  knitr::kable(caption = "Peabody Museum Instagram post clusters", padding = 0) %>%
+  kable_styling(bootstrap_options = "striped", full_width = F)
+```
+
+Clustering places each photo into a distinct group, though in reality, photos contain multiple subjects that could fit into multiple clusters. In this analysis, many of those multi-subject images end up in the largest cluster I call 'Exhibits & other'. In addition to this, three other clusters specifically refer to exhibits: 'Great Hall`, 'Mineral Hall', and 'Birds'. Another group of images with the tags 'sculpture', 'statue', 'dinosaur', and 'sky' refers to the Torosaurus statue outside the museum. 
+
+Overall, this cluster analysis gives us a much better idea of the content of the museum visitor's social media posts, but it can also oversimplify the story of how the visitors engage with exhibits.
+
+## Principal Component Analysis
+
+To further understand the content of Instagram posts, we can use a different data science tool called Principal Component Analysis (PCA)[^julia]. Rather than put each image into a distinct cluster, PCA breaks down the features of the photos, identifying the labels that best explain the differences between each Instagram post[^oversimplified]. This analysis returns a handful of scores for each image label. The magnitude of this score, either below or above zero, is related to the label's importance for that principal component.
+
+[^julia]: This method of principal component analysis is heavily inspired by Julia Silge's [awesome work](https://juliasilge.com/blog/stack-overflow-pca/) using PCA to understand Stack Overflow data.
+
+[^oversimplified]: A very over-simplified explanation.
+
+For example, the first principal component finds that the labels 'glasses', 'face', and 'smile' contrast with the labels 'dinosaur', 'architecture', and 'building'. This tells us that a key defining feature of Instagram photos at the Peabody Museum is `r paste_pca_labels(1)`. In other words, a great way to sort social media posts is by `r pca_labels[1,2] %>% tolower()` or `r pca_labels[1,3] %>% tolower()`. 
+
+```{r pca_tag1, fig.width=7, fig.height=4}
+
+img_tidied_pca %>%
+  filter(PC == "PC1") %>%
+  top_n(30, abs(Contribution)) %>%
+  mutate(Tag = reorder(Tag, Contribution)) %>%
+  ggplot(aes(Tag, Contribution, fill = Tag)) +
+  geom_col(show.legend = FALSE, alpha = 1) +
+  # scale_fill_gradient(high = "#00436b", low="#416825")+ 
+  scale_fill_discrete( h = c(202, 60), l = seq(21, 50, length.out = 40)) +
+  labs(title = "Image label importance in first principal component",
+       caption = "Ryan Timpe .com",
+       x = "Image labels",
+       y = "Relative importance") +
+  theme_minimal() + 
+  theme(axis.text.x = element_text(angle = 90, hjust = 1, vjust = 0.5, color = "black"), 
+        axis.ticks.x = element_blank(),
+        axis.text.y=element_blank(),
+        axis.ticks.y =element_blank(),
+        axis.text = element_text(color = "black"),
+        axis.title = element_text(face = "bold"))
+
+```
+
+Next, PCA identifies contrasting image labels as `r paste_pca_labels(2)`, and then `r paste_pca_labels(3)`. In total, I've identified `r nrow(pca_labels)` key factors in classifying Instagram posts taken at the Peabody Museum using principal component analysis. This analysis allows us to now assess visitor interaction with `r nrow(pca_labels)` descriptions, rather than looking at each of the `r num_labels` labels produced by the Cloud Vision AI.
+
+```{r list_of_pca, fig.width=4}
+pca_labels %>% 
+  select(dplyr::starts_with("PC_")) %>% 
+  select(`Like This...` = PC_label_neg, `...or This?` = PC_label_pos) %>% 
+  knitr::kable(padding = 0) %>%
+  kable_styling(bootstrap_options = "striped", full_width = F)
+```
+
+Think of this as a Peabody Museum version of the game [Twenty Questions](http://www.20q.net/) (but actually only `r nrow(pca_labels)` questions). Is an Instagram photo more like the left option, right option, or neither? Repeat this for each of the components to get a clear understanding of the contents of the photo.
+
+## Plotting these features
+
+We can't play this `r nrow(pca_labels)` questions game for every individual photo, but viewing these principal components (questions) together for every image on a 2-dimensional computer screen is a challenge. Instead, we can look at pairs of these components. Below, I plot the '`r paste_pca_labels(1)`' description from left (more `r pca_labels[1,2] %>% tolower()`) to right (more `r pca_labels[1,3] %>% tolower()`) and then the '`r paste_pca_labels(2)`' description from bottom (more `r pca_labels[2,2] %>% tolower()`) to top (more `r pca_labels[2,3] %>% tolower()`). 
+
+In this chart, each point represents one Instagram post, colored by the clusters from the analysis above. Data points (photos) away from the center of the plot can be described by one or both of these principal components, while points in the center of plot are not cleanly described by these components.
+
+```{r pca_2d_1c, fig.width=8, fig.height=4}
+
+pca_variation <- tibble(PC = paste0("PC", 1:20),
+                        PC_variation = img_pca_pca$sdev^2 / sum(img_pca_pca$sdev^2)) %>% 
+  inner_join(pca_labels %>% mutate(PC = trimws(PC)))
+
+plot_pca <- augmented_pca %>%
+  mutate(PCx = PC1, PCy = PC2) 
+
+pcx_n = 1
+pcy_n = 2
+
+plot_dim_x = max(abs(plot_pca$PCx), na.rm=TRUE)
+plot_dim_y = max(abs(plot_pca$PCy), na.rm=TRUE)
+
+ggplot(plot_pca, aes(PCx, PCy, color= cluster_name)) +
+  geom_point(size = 1.3, alpha = 0.1) +
+  scale_color_discrete( l = seq(50, 21, length.out = 10)) +
+  geom_hline(yintercept =  0) + geom_vline(xintercept =  0) +
+  labs(title = "Comparison of Instagram posts on two principal components, by cluster",
+       caption = "Ryan Timpe .com") +
+  #Neg X
+  annotate("text", x=-plot_dim_x/2, y = -plot_dim_y, hjust = 0.5,
+           label = paste_pca_chart(pcx_n, side = "neg"), fontface = 2) +
+  annotate("text", x=-plot_dim_x/2, y = plot_dim_y, hjust = 0.5,
+           label = paste_pca_chart(pcx_n, side = "neg"), fontface = 2) +
+  #Pos X
+  annotate("text", x=plot_dim_x/2, y = -plot_dim_y, hjust = 0.5,
+           label = paste_pca_chart(pcx_n, side = "pos", "right"), fontface = 2) +
+  annotate("text", x=plot_dim_x/2, y = plot_dim_y, hjust = 0.5,
+           label = paste_pca_chart(pcx_n, side = "pos", "right"), fontface = 2) +
+  #Pos Y
+  annotate("text", x=-plot_dim_x, y = plot_dim_y/2, hjust = 0.5,
+           label = paste_pca_chart(pcy_n, side = "pos", "right"), fontface = 2, angle = 90) +
+  annotate("text", x=plot_dim_x, y = plot_dim_y/2, hjust = 0.5,
+           label = paste_pca_chart(pcy_n, side = "pos", "left"), fontface = 2, angle = 270) +
+  #Neg Y
+  annotate("text", x=-plot_dim_x, y = -plot_dim_y/2, hjust = 0.5,
+           label = paste_pca_chart(pcy_n, side = "neg", "left"), fontface = 2, angle = 90) +
+  annotate("text", x=plot_dim_x, y = -plot_dim_y/2, hjust = 0.5,
+           label = paste_pca_chart(pcy_n, side = "neg", "right"), fontface = 2, angle = 270) +
+  coord_cartesian(xlim = c(-plot_dim_x, plot_dim_x), ylim = c(-plot_dim_y, plot_dim_y)) +
+  guides(colour = guide_legend(title = "Cluster", override.aes = list(alpha=0.5))) +
+  theme_minimal()+
+  theme(
+    axis.title = element_blank(),
+    axis.text  = element_blank(),
+    panel.grid = element_blank()
+  ) +
+  NULL
+
+```
+
+We can see some clear relationships from this chart - posts labeled as more `r pca_labels[1,2] %>% tolower()` are slightly more likely to be better described as also being more `r pca_labels[2,3] %>% tolower()`, though most are close to horizontal black line, suggesting a weak relationship. These images, as expected, are almost exclusively in the purple 'People' cluster.
+
+On the upper right of the chart, we can see that posts that belong to the 'Architecture', 'Outdoors', and 'Torosaurus statue' clusters are more about `r pca_labels[1,3] %>% tolower()` and are more `r pca_labels[2,3] %>% tolower()`. The 'Birds' cluster extends toward the bottom in the `r pca_labels[1,3] %>% tolower()` and `r pca_labels[2,2] %>% tolower()` quadrant.
+
+The green data points, belonging to the 'Exhibits & other' cluster, stand out for being a large mass in the center of the plot. For the most part, these points are not strongly '`r paste_pca_labels(1)`' or '`r paste_pca_labels(2)`'. As you "rotate" the plot over different pairs of principal components, the majority of these points remain close to the center of the plot. These images tend to have a lot of detail or components (people, exhibits, events, close-up specimens), so the Cloud Vision labels don't always capture the full detail.
+
+Below, I rotate the chart and plot the '`r paste_pca_labels(5)`' components against the same '`r paste_pca_labels(2)`' component. Here I remove the green 'Exhibits & other' cluster so we can more clearly see patterns in more clearly-defined clusters.
+
+```{r pca_2d_2, fig.width=8, fig.height=4}
+plot_pca <- augmented_pca %>%
+  mutate(PCx = PC5, PCy = PC2) %>% 
+  mutate(PCx = ifelse(cluster_name == "Exhibits & other", NA, PCx),
+         PCy = ifelse(cluster_name == "Exhibits & other", NA, PCy))
+
+pcx_n = 5
+pcy_n = 2
+
+plot_dim_x = max(abs(plot_pca$PCx), na.rm=TRUE)
+plot_dim_y = max(abs(plot_pca$PCy), na.rm=TRUE)
+
+ggplot(plot_pca, aes(PCx, PCy, color= cluster_name)) +
+  geom_point(size = 1.3, alpha = 0.1) +
+  scale_color_discrete( l = seq(50, 21, length.out = 10)) +
+  geom_hline(yintercept =  0) + geom_vline(xintercept =  0) +
+  labs(title = "Comparison of Instagram posts on two principal components, by cluster",
+       subtitle = "'Exhibits & other' cluster removed",
+       caption = "Ryan Timpe .com") +
+  #Neg X
+  annotate("text", x=-plot_dim_x/2, y = -plot_dim_y, hjust = 0.5,
+           label = paste_pca_chart(pcx_n, side = "neg"), fontface = 2) +
+  annotate("text", x=-plot_dim_x/2, y = plot_dim_y, hjust = 0.5,
+           label = paste_pca_chart(pcx_n, side = "neg"), fontface = 2) +
+  #Pos X
+  annotate("text", x=plot_dim_x/2, y = -plot_dim_y, hjust = 0.5,
+           label = paste_pca_chart(pcx_n, side = "pos", "right"), fontface = 2) +
+  annotate("text", x=plot_dim_x/2, y = plot_dim_y, hjust = 0.5,
+           label = paste_pca_chart(pcx_n, side = "pos", "right"), fontface = 2) +
+  #Pos Y
+  annotate("text", x=-plot_dim_x, y = plot_dim_y/2, hjust = 0.5,
+           label = paste_pca_chart(pcy_n, side = "pos", "right"), fontface = 2, angle = 90) +
+  annotate("text", x=plot_dim_x, y = plot_dim_y/2, hjust = 0.5,
+           label = paste_pca_chart(pcy_n, side = "pos", "left"), fontface = 2, angle = 270) +
+  #Neg Y
+  annotate("text", x=-plot_dim_x, y = -plot_dim_y/2, hjust = 0.5,
+           label = paste_pca_chart(pcy_n, side = "neg", "left"), fontface = 2, angle = 90) +
+  annotate("text", x=plot_dim_x, y = -plot_dim_y/2, hjust = 0.5,
+           label = paste_pca_chart(pcy_n, side = "neg", "right"), fontface = 2, angle = 270) +
+  coord_cartesian(xlim = c(-plot_dim_x, plot_dim_x), ylim = c(-plot_dim_y, plot_dim_y)) +
+  guides(colour = guide_legend(title = "Cluster", override.aes = list(alpha=0.5))) +
+  theme_minimal()+
+  theme(
+    axis.title = element_blank(),
+    axis.text  = element_blank(),
+    panel.grid = element_blank()
+  ) +
+  NULL
+
+```
+
+In this view of the data, the purple 'People' cluster shrinks, as it is not well-described by the '`r paste_pca_labels(5)`' principal component. Instead, the blue 'Mineral hall' cluster extends to the left and the 'Birds' and 'Flowers' clusters in brown and green extend right. Images of the 'Great Hall' are also partially described by the minerals/natural quadrant.
+
+## Interpretablity
+
+The museum can use this data to begin to answer questions about how guests share their museum visits with others on social media. For example, when visitors take portraits or selfies, where do they take them?
+
+For this, we can go back to the first principal component, '`r paste_pca_labels(1)`', and look at the most common *non-human* image labels associated with those photos. These include 'fun' (which tends to include museum events), 'recreation' in the Great Hall, 'mineral', and 'snout' & 'mammal' (guests really like the bears on the 2nd floor and the occasional photo of their dog).
+
+# Further exploration
+
+## Age of Reptiles
+
+```{r aor}
+aor <- img_pro2 %>%
+  select(ID, cluster, CloudLogo) %>% 
+  filter(map_lgl(CloudLogo, ~!is.null(.x))) %>% 
+  unnest() %>% 
+  filter(description == "The Age of Reptiles") %>% 
+  select(ID) %>% 
+  mutate(AoR = TRUE)
+
+img_aor <- img_pro2 %>% 
+  left_join(aor) %>% 
+  mutate(AoR = ifelse(!AoR | is.na(AoR), F, T)) %>% 
+  count(cluster_name, AoR) %>% 
+  filter(AoR)
+```
+
+Google Cloud Vision has a second feature that searches for trademarked logos and copy written images within the photos. This feature is able to identify famous works of art inside an image, including the [Peabody's Age of Reptiles](http://peabody.yale.edu/exhibits/age-reptiles-mural) mural. The AI is able to positively identify the Age of Reptiles mural in `r nrow(aor)` Instagram posts. 
+
+There are many potentially valuable uses of this information. For now, we can use this data to help validate our clustering algorithm. We'd expect all images that contain the Age of Reptiles to be grouped in the 'Great Hall' cluster and while most are, the mural also appears in a few other clusters:
+
+```{r aor_clusters}
+img_aor %>% 
+  select(Cluster = cluster_name, Images = n) %>% 
+  knitr::kable(padding = 0) %>%
+  kable_styling(bootstrap_options = "striped", full_width = F)
+```
+
+Visual inspection of these clusters shows that most of these images were taken in the Great Hall, even if they were allocated into other clusters. In some cases, the prevalence of plants and trees in the mural resulted in the image being allocated to the 'Outside' cluster. In another case, the trees in the mural along with the ceratopsian skulls resulted in the image being allocated to the 'Torosaurus statue' cluster.
+
+## \#peabodyselfiesaurus
+
+```{r pss}
+pss <- img_pro2 %>% 
+  unnest(Tags) %>% 
+  unnest_tokens(hashes, XPKeywords) %>% 
+  filter(hashes == "peabodyselfiesaurus")
+
+img_pss <- augmented_pca %>% 
+  inner_join(pss)
+```
+
+At the end of 2016, the Peabody Museum introduced its first official hashtag for visitors to use when posting photos of themselves with the Torosaurus statue: \#peabodyselfiesaurus. In this analysis, `r nrow(img_pss)` Instagram posts use this hashtag, though it has been used 194 total times if we count the Instagram posts without the Peabody Museum location tag. Was this a successful marketing tactic? What are the image labels, clusters, and principal components associated with this hashtag?
+
+```{r pss_table, include=FALSE}
+pss %>% 
+  count(cluster_name) %>% 
+  arrange(desc(n)) %>% 
+  rename(Cluster = cluster_name, Images = n) %>% 
+  knitr::kable(padding = 0, caption = "Clusters with #peabodyselfiesaurus") %>%
+  kable_styling(bootstrap_options = "striped", full_width = F)
+```
+
+```{r pss_charts, fig.width=8, fig.height=4}
+
+plot_pca <- augmented_pca %>%
+  mutate(PCx = PC1, PCy = PC11) %>% 
+  mutate(PCx = ifelse(ID %in% img_pss$ID, PCx, NA),
+         PCy = ifelse(ID %in% img_pss$ID, PCy, NA)) %>% 
+  left_join(pss %>% 
+              count(cluster_name) %>% 
+              rename(pss = n)) %>%
+  mutate(cluster_name = ifelse(!is.na(pss), paste0(cluster_name, " (", pss, ")"), cluster_name))
+
+pcx_n = 1
+pcy_n = 11
+
+plot_dim_x = max(abs(plot_pca$PCx), na.rm=TRUE)
+plot_dim_y = max(abs(plot_pca$PCy), na.rm=TRUE)
+
+ggplot(plot_pca, aes(PCx, PCy, color= cluster_name)) +
+  geom_point(size = 1.75, alpha = 0.25) +
+  scale_color_discrete( l = seq(50, 21, length.out = 10)) +
+  geom_hline(yintercept =  0) + geom_vline(xintercept =  0) +
+  labs(title = "#peabodyselfiesaurus posts on two principal components, by cluster",
+       subtitle = "Number of images in parentheses",
+       caption = "Ryan Timpe .com") +
+  #Neg X
+  annotate("text", x=-plot_dim_x/2, y = -plot_dim_y, hjust = 0.5,
+           label = paste_pca_chart(pcx_n, side = "neg"), fontface = 2) +
+  annotate("text", x=-plot_dim_x/2, y = plot_dim_y, hjust = 0.5,
+           label = paste_pca_chart(pcx_n, side = "neg"), fontface = 2) +
+  #Pos X
+  annotate("text", x=plot_dim_x/2, y = -plot_dim_y, hjust = 0.5,
+           label = paste_pca_chart(pcx_n, side = "pos", "right"), fontface = 2) +
+  annotate("text", x=plot_dim_x/2, y = plot_dim_y, hjust = 0.5,
+           label = paste_pca_chart(pcx_n, side = "pos", "right"), fontface = 2) +
+  #Pos Y
+  annotate("text", x=-plot_dim_x, y = plot_dim_y/2, hjust = 0.5,
+           label = paste_pca_chart(pcy_n, side = "pos", "right"), fontface = 2, angle = 90) +
+  annotate("text", x=plot_dim_x, y = plot_dim_y/2, hjust = 0.5,
+           label = paste_pca_chart(pcy_n, side = "pos", "left"), fontface = 2, angle = 270) +
+  #Neg Y
+  annotate("text", x=-plot_dim_x, y = -plot_dim_y/2, hjust = 0.5,
+           label = paste_pca_chart(pcy_n, side = "neg", "left"), fontface = 2, angle = 90) +
+  annotate("text", x=plot_dim_x, y = -plot_dim_y/2, hjust = 0.5,
+           label = paste_pca_chart(pcy_n, side = "neg", "right"), fontface = 2, angle = 270) +
+  coord_cartesian(xlim = c(-plot_dim_x, plot_dim_x), ylim = c(-plot_dim_y, plot_dim_y)) +
+  guides(colour = guide_legend(title = "Cluster", override.aes = list(alpha=0.5))) +
+  theme_minimal()+
+  theme(
+    axis.title = element_blank(),
+    axis.text  = element_blank(),
+    panel.grid = element_blank()
+  ) +
+  NULL
+
+```
+
+Images posted with the #peabodyselfiesaurus hashtag primarily are clustered in 'People', 'Torosaurus statue', and 'Exhibits & other', depending on whether the human or the statue is more predominantly featured in the image. For the principal components, most uses of the hashtag are located in the bottom left `r pca_labels[1,2] %>% tolower()` and `r pca_labels[11,2] %>% tolower()` quadrant, though images in the 'Torosaurus statue' cluster are concentrated on the right-hand `r pca_labels[1,3] %>% tolower()` side of the chart.
+
+There are a handful of points in the upper left `r pca_labels[2,3] %>% tolower()` quadrant of the chart. These are instances when the visitors used the #peabodyselfiesaurus hashtag for photos with other Peabody exhibits[^selfiesaurus].
+
+[^selfiesaurus]: Overall, this #peabodyselfiesaurus analysis suggests that there is visitor interest in engaging with museum-sanctioned social media marketing and this is something the museum may want to invest more resources into going forward. This specific hashtag, however, might have been too complicated or verbose. 8 visitors, for whatever reason, use the hashtag #selfiesaurus instead.
+
+# Future Analysis
+
+Looking at engagements with the Age of Reptiles mural and the #peabodyselfiesaurus hashtag are just two simple examples of using the Cloud Vision AI, clustering, and principal component analysis tools to understand how visitors use social media to share their visits to the museum. This data, along with the other information in each Instagram post (date and time, caption, and hashtags) can be used to get a more complete understanding of visitor engagement. Future analyses can look into:
+
+  - Differences in guest engagement during special events.
+      - 12 guests posted 42 photos about the Bones & Beer event in May 2018
+      - 9 posts about Fiesta Latina total in 2017 and 2018
+      - 23 visitors posted about MLK day in 2018 and 17 posted in 2017
+  - Does engagement increase when new exhibits open?
+  - Visitor engagement during weekdays and weekends or free admissions vs paid admission days.
+  - Text and sentiment analysis of photo captions. Can Instagram posts be considered a form of review for a trip?
+  - Relationship between post human-generated labels (hashtags & captions) and the AI-generated labels?
+  - A more complete cross-examination of PCA with interactive charts to "rotate" the components.
+
+***
+
+*Learn more about the [Peabody Museum](http://peabody.yale.edu/). Also check out my [series of posts](../../../../tags/age-of-reptiles) on the data behind the Age of Reptiles mural.*
