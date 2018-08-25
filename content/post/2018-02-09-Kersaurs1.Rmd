@@ -60,7 +60,7 @@ I also used `r length(phylo)` [silhouette images](https://github.com/ryantimpe/d
 
 #### Developers
 
-I had it easy for this project. [Jonathan Nolis](https://twitter.com/skyetetra) published his project to generate [offensive license plates](https://towardsdatascience.com/using-deep-learning-to-generate-offensive-license-plates-619b163ed937) that would be banned in Arizona. He based his work off of the Keras example creating new [text in the style of Nietzsche](https://keras.rstudio.com/articles/examples/lstm_text_generation.html). Jonathan figured that predicting letters from license plates isn't much different than predicting words from tomes. Generating new dinosaurs names was the logical next step, of course.
+I had it easy for this project. [Jonathan Nolis](https://twitter.com/skyetetra) published their project to generate [offensive license plates](https://towardsdatascience.com/using-deep-learning-to-generate-offensive-license-plates-619b163ed937) that would be banned in Arizona. They based their work off of the Keras example creating new [text in the style of Nietzsche](https://keras.rstudio.com/articles/examples/lstm_text_generation.html). Jonathan figured that predicting letters from license plates isn't much different than predicting words from tomes. Generating new dinosaurs names was the logical next step, of course.
 
 #### An Explanation 
 

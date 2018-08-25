@@ -96,7 +96,7 @@ Though the exhibits are understandably slow to adapt to ever-changing technology
 
 [^steg]: The Stegosaurus skeleton in the center of the Great Hall has had the incorrect number of tail spikes since 1926. `r emo::ji("shrug")`
 
-In order to update museum offerings to reflect the changing habits of visitors, it's imperative to understand those habits. Many visitors share their experiences on social media platform. These social media posts capture how visitors interact with museum exhibits through their phones, providing insights into what visitors do when they aren't reading signage or engaging with museum staff and volunteers. With a better understanding of how guests interact inside the walls, museums can improve events, exhibits, and marketing to further encourage this behavior. After all, each positive social media post at the museum is a free advertisement for the Peabody.
+In order to update museum offerings to reflect the changing habits of visitors, it's imperative to understand those habits. Many visitors share their experiences on social media platforms. These social media posts capture how visitors interact with museum exhibits through their phones, providing insights into what visitors do when they aren't reading signage or engaging with museum staff and volunteers. With a better understanding of how guests interact inside the walls, museums can improve events, exhibits, and marketing to further encourage this behavior. After all, each positive social media post at the museum is a free advertisement for the Peabody.
 
 *Note: I'm not a Peabody Museum employee, just a fan.*
 
@@ -158,7 +158,7 @@ ggplot() +
 
 ```
 
-The goal is to use the visitors in the **yellow box** to understand the behavior of the visitors in the **light blue** box, the museum guests who interact with the exhibits using their smartphones and social media. We won't have enough information to understand the behavior of visitors in the darker blue box.
+The goal is to use the visitors in the **transparent yellow / green box** to understand the behavior of the visitors in the **light blue** box, the museum guests who interact with the exhibits using their smartphones and social media. We won't have enough information to understand the behavior of visitors in the darker blue box.
 
 # The Analysis 
 
