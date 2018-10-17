@@ -1,0 +1,286 @@
+---
+title: 'How To: Spiral line drawings with the tidyverse and gganimate'
+author: Ryan Timpe
+date: '2018-09-11'
+slug: Spiral1
+categories:
+  - Data Art
+  - Data Viz
+tags:
+  - Golden Girls
+  - R
+summary: 'COnvert and image into a single-line spiral drawing using R and the tidyverse.'
+header: 
+  image: "posts/SpiralDrawings1.jpg"
+---
+
+
+
+<div id="introduction" class="section level3">
+<h3>Introduction</h3>
+<p>I stumbled on this video from Instagram of an artist creating a picture of Marilyn Monroe by drawing a single spiral from the inside out, varying the thickness of the line to add light and shadow to the image.</p>
+<p><a href="https://www.instagram.com/p/BnWUPYjDvdH/"><img src="/img/Spiral_orig.jpg" alt="Click to watch" width="350" /></a></p>
+<p>After watching the video on loop way too many times, I decided that I had to try and see if could do the same. Given that my drawing skills are near-zero, I turned to R and ggplot. Turns out, this was also a great opportunity to learn <a href="https://twitter.com/thomasp85">Thomas Pedersen</a>’s <a href="https://github.com/thomasp85/gganimate">gganimate</a> package for turning ggplots into animated gifs.</p>
+</div>
+<div id="the-goal" class="section level3">
+<h3>The Goal</h3>
+<p>Using R, the tidyverse, and gganimate, reproduce a photo as a spiral using just a single line of varying thickness.</p>
+</div>
+<div id="prepare-the-image" class="section level3">
+<h3>Prepare the image</h3>
+<p>Like the video, we’ll reproduce an iconic black-and-white image, though I chose a portrait of Albert Einstein instead.</p>
+<div class="figure">
+<img src="/img/Einstein.jpg" width="300" />
+
+</div>
+<p>As a first step, we resize the image. I had previously written some functions to <a href="https://github.com/ryantimpe/LEGOMosaics">convert an image into a LEGO mosaic</a>. We can use the <code>scale_image()</code> function from this project, which takes a 3-dimensional JPG or PNG matrix (width, height, RGB channel), crops it into a square, and converts it to a tidy data frame for plotting.</p>
+<p><details> <summary>Click here to see script</summary></p>
+<pre class="r"><code>#1 SCALE IMAGE ----
+# Adapted from LEGO mosaics project
+scale_image &lt;- function(image, img_size){
+  #Convert image to a data frame with RGB values
+  img &lt;- bind_rows(
+    list(
+      (as.data.frame(image[, , 1]) %&gt;% 
+         mutate(y=row_number(), channel = &quot;R&quot;)),
+      (as.data.frame(image[, , 2]) %&gt;% 
+         mutate(y=row_number(), channel = &quot;G&quot;)),
+      (as.data.frame(image[, , 3]) %&gt;% 
+         mutate(y=row_number(), channel = &quot;B&quot;))
+    )
+  ) %&gt;% 
+    gather(x, value, -y, -channel) %&gt;% 
+    mutate(x = as.numeric(gsub(&quot;V&quot;, &quot;&quot;, x))) %&gt;% 
+    spread(channel, value)
+  
+  img_size &lt;- round(img_size, 0)
+  
+  #Wide or tall image? Shortest side should be `img_size` pixels
+  if(max(img$x) &gt; max(img$y)){
+    img_scale_x &lt;-  max(img$x) / max(img$y)
+    img_scale_y &lt;- 1
+  } else {
+    img_scale_x &lt;- 1
+    img_scale_y &lt;-  max(img$y) / max(img$x)
+  }
+  
+  #If only 1 img_size value, create a square image
+  if(length(img_size) == 1){
+    img_size2 &lt;- c(img_size, img_size)
+  } else {
+    img_size2 &lt;- img_size[1:2]
+    img_scale_x &lt;- 1
+    img_scale_y &lt;- 1
+  }
+  
+  #Rescale the image
+  img2 &lt;- img %&gt;% 
+    mutate(y_scaled = (y - min(y))/(max(y)-min(y))*img_size2[2]*img_scale_y + 1,
+           x_scaled = (x - min(x))/(max(x)-min(x))*img_size2[1]*img_scale_x + 1) %&gt;% 
+    select(-x, -y) %&gt;% 
+    group_by(y = ceiling(y_scaled), x = ceiling(x_scaled)) %&gt;% 
+    #Get average R, G, B and convert it to hexcolor
+    summarize_at(vars(R, G, B), funs(mean(.))) %&gt;% 
+    rowwise() %&gt;% 
+    mutate(color = rgb(R, G, B)) %&gt;% 
+    ungroup() %&gt;% 
+    #Center the image
+    filter(x &lt;= median(x) + img_size2[1]/2, x &gt; median(x) - img_size2[1]/2,
+           y &lt;= median(y) + img_size2[2]/2, y &gt; median(y) - img_size2[2]/2) %&gt;%
+    #Flip y
+    mutate(y = (max(y) - y) + 1)
+  
+  out_list &lt;- list()
+  out_list[[&quot;Img_scaled&quot;]] &lt;- img2
+  
+  return(out_list)
+}</code></pre>
+<p></details></p>
+<p>We will want our final spiral to have a radius of 50px (<code>radius</code>), so we can pass <code>radius * 2</code> to the scaling function, creating a 100 pixel x 100 pixel image.</p>
+<pre class="r"><code>library(tidyverse)
+library(jpeg)
+
+radius &lt;- 50 #pixels
+einstein &lt;- readJPEG(&quot;SpiralDrawings/Einstein.jpg&quot;) %&gt;% 
+  scale_image(radius * 2)
+
+einstein$Img_scaled %&gt;% 
+  ggplot(aes(x=x, y=y, fill=color)) + 
+  geom_raster() +
+  scale_fill_identity(guide = FALSE) +
+  labs(title = &quot;Scaled Einstein image&quot;, 
+       subtitle = &quot;100px * 100px&quot;) +
+  coord_fixed() +
+  theme_void()</code></pre>
+<p><img src="/post/2018-09-10-Spirals1_files/figure-html/scale_image-1.png" width="288" /></p>
+</div>
+<div id="polar-vs-cartesian-coordinates" class="section level3">
+<h3>Polar vs Cartesian coordinates</h3>
+<p>Drawing a spiral in polar coordinates is easy enough…</p>
+<pre class="r"><code>tibble(x = rep(c(1:20), 20), y = 1:400) %&gt;% 
+  ggplot(aes(x=x, y=y)) +
+  geom_path() +
+  coord_polar() +
+  theme_void()</code></pre>
+<p><img src="/post/2018-09-10-Spirals1_files/figure-html/spir_polar-1.png" width="288" /></p>
+<p>Using that process, I originally tried to convert the image x- and y-values into polar coordinates beginning in the center of the image. That task turned out to be much more difficult than I had imagined.</p>
+<p>Instead, I opted to draw a spiral in Cartesian coordinates. It’s been 10 years since my last trigonometry class, but found <a href="https://stackoverflow.com/questions/13894715/draw-equidistant-points-on-a-spiral">this helpful post</a> on Stack Overflow. Based off the first answer on the thread, I wrote a function to calculate the points of a spiral centered on the image. All points on this spiral are equidistant, so more points are on the outer sections of the spiral than the inner sections.</p>
+<p><details> <summary>Click here to see script</summary></p>
+<pre class="r"><code># Function for equidistant points on a spiral
+
+spiral_cartesian &lt;- function(img_df, spiral_radius, num_coils, chord_length, rotation){
+  img &lt;- img_df$Img_scaled
+  
+  #Derive additional spiral specifications
+  centerX &lt;- median(img$x)
+  centerY &lt;- median(img$y)
+  
+  thetaMax &lt;- num_coils * 2 * pi
+  awayStep &lt;- spiral_radius / thetaMax
+  
+  #While loop to keep drawing spiral until we hit thetaMax
+  spiral &lt;- tibble()
+  theta &lt;- chord_length/awayStep
+  
+  while(theta &lt;= thetaMax){
+    #How far away from center
+    away = awayStep * theta
+    
+    #How far around the center
+    around = theta + rotation
+    
+    #Convert &#39;around&#39; and &#39;away&#39; to X and Y.
+    x = centerX + cos(around) * away
+    y = centerY + sin(around) * away
+    
+    spiral &lt;- spiral %&gt;% 
+      bind_rows(tibble(x=x, y=y))
+    
+    theta = theta + chord_length/away
+  }
+  
+  return(c(img_df, list(spiral = spiral)))
+}</code></pre>
+<p></details></p>
+<p>We can then pass the <code>einstein</code> image into this function (this provides the function with the desired x- and y-limits), along with specifications for the radius of the spiral (defined earlier), the number of coils, the chord length (distance between each point), and the rotation. We can plot this spiral using <code>coord_fixed()</code> - Cartesian coordinates rather than the polar coordinates above.<a href="#fn1" class="footnoteRef" id="fnref1"><sup>1</sup></a></p>
+<pre class="r"><code>einstein &lt;- einstein %&gt;% 
+  spiral_cartesian(spiral_radius = radius, 
+                   num_coils     = 50, #Spiral folds on itself 50 times
+                   chord_length  = 2,  #Each point is 2 pixels apart
+                   rotation      = 0   #No rotation
+                   )
+
+einstein$spiral %&gt;% 
+  ggplot(aes(x=x, y=y)) +
+  geom_path() +
+  coord_fixed() + #Not polar!
+  theme_void()</code></pre>
+<p><img src="/post/2018-09-10-Spirals1_files/figure-html/run_spiral_function-1.png" width="288" /></p>
+</div>
+<div id="mapping-the-image-onto-the-spiral" class="section level3">
+<h3>Mapping the image onto the spiral</h3>
+<p>The artist in the video is able to portray Marilyn Monroe by varying the thickness of the line while drawing a continuous spiral. Now that we have the our spiral in Cartesian coordinates and have scaled it to same size as the photo of Einstein, we need to vary the thickness.</p>
+<p>We can do this by effectively overlaying the spiral on top of the image and then assigning the color of the closet image pixel(s) to the spiral point. In this function, I convert the three color channels to an inverted grey scale, where the value of 0 means white, 1 means black, and anything in between is a shade of grey.</p>
+<p><details> <summary>Click here to see script</summary></p>
+<pre class="r"><code>#Project the image onto the spiral
+project_image &lt;- function(img_df){
+  dat &lt;- img_df$spiral %&gt;% 
+    #Round each spiral point to nearest whole number
+    mutate(xs = round(x), ys = round(y)) %&gt;% 
+    #Join on the rounded points
+    left_join(img_df$Img_scaled %&gt;% rename(xs=x, ys=y)) %&gt;% 
+    #Create greyscale - 0 is lightest, 1 is darkest
+    mutate(grey = R+G+B,
+           grey = (1- (grey / max(grey))))
+    
+  return(c(img_df, list(projected_spiral = dat)))
+}</code></pre>
+<p></details></p>
+<p>We plot the spiral again, but this time, use the grey value to scale the thickness<a href="#fn2" class="footnoteRef" id="fnref2"><sup>2</sup></a> of the line. To increase the contrast of the photo, raise the grey value to a power greater than 1.</p>
+<pre class="r"><code>einstein &lt;- einstein %&gt;% 
+  project_image()
+
+einstein$projected_spiral %&gt;% 
+  ggplot(aes(x=x, y=y, size = grey^(5/4))) +
+  geom_path() +
+  scale_size_continuous(range = c(0.1, 1.8), 
+                        guide = FALSE) +
+  coord_fixed(expand = FALSE) + 
+  theme_void()</code></pre>
+<p><img src="/post/2018-09-10-Spirals1_files/figure-html/run_spiral_project-1.png" width="384" /></p>
+<p>…Boom! A single spiral of varying line thickness to render an image of Albert Einstein.</p>
+</div>
+<div id="animating-the-spiral" class="section level3">
+<h3>Animating the spiral</h3>
+<p>The original video seems way more impressive than this image. I can’t compete with a hand-drawn image, but can add some drama to this project by animating the spiral, slowly drawing it from the inside out.</p>
+<p>We can do this using the package <a href="https://github.com/thomasp85/gganimate">gganimate</a>, which converts ggplots into animated gifs<a href="#fn3" class="footnoteRef" id="fnref3"><sup>3</sup></a>.</p>
+<pre class="r"><code>library(gganimate)
+
+einstein$projected_spiral %&gt;% 
+  mutate(row_number = row_number()^(1/2)) %&gt;%  #^(1/2) slows down the beginning of the drawing
+  ggplot(aes(x=x, y=y, size = grey)) + #Original contrast for this larger drawing
+  geom_path() +
+  scale_size_continuous(range = c(0.1, 1.8), 
+                        guide = FALSE) +
+  coord_fixed(expand = FALSE) + 
+  theme_void() +
+  transition_reveal(1, row_number)</code></pre>
+<p><img src="/post/2018-09-10-Spirals1_files/figure-html/run_spiral_animate-1.gif" /><!-- --></p>
+<p>Adding <code>gganimate</code> functions to an existing ggplot is simple. We add one new series, <code>row_number</code>, to our data frame, which is used in the final plotting step. Adding <code>+ transition_reveal(1, row_number)</code> to the ggplot instructions tells R to render this as an animation, revealing all the data as a single group (<code>1</code>) over the time span <code>row_number</code>. By using the square root of <code>row_number()</code>, <code>gganimate</code> will spend more time drawing the inner sections of the spiral, speeding up as it reaches the outer lines.</p>
+<p>Project: ✅ Done</p>
+</div>
+<div id="additional-features" class="section level3">
+<h3>Additional features</h3>
+<p>The spiral drawing function can be used for color images as well. This doesn’t make much sense for simulating a hand-drawn image using a marker, but still produces a fun image.</p>
+<pre class="r"><code>goldengirls &lt;- readJPEG(&quot;SpiralDrawings/GoldenGirls.jpg&quot;) %&gt;% 
+  scale_image(radius * 2) %&gt;% 
+  spiral_cartesian(spiral_radius = radius, 
+                   num_coils     = 50, #Spiral folds on itself 50 times
+                   chord_length  = 2,  #Each point is 2 pixels apart
+                   rotation      = 0   #No rotation
+                   )  %&gt;% 
+  project_image()
+
+goldengirls$projected_spiral %&gt;% 
+  mutate(row_number = row_number()^(1/2)) %&gt;% 
+  ggplot(aes(x=x, y=y, size = grey, 
+             color = color)) +
+  geom_path(aes(group=1)) + #Add a group to tell it to draw a single line
+  scale_size_continuous(range = c(0.1, 1.8), 
+                        guide = FALSE) +
+  scale_color_identity(guide = FALSE) +
+  coord_fixed(expand = FALSE) + 
+  theme_void() +
+  transition_reveal(1, row_number)</code></pre>
+<p><img src="/post/2018-09-10-Spirals1_files/figure-html/goldengirls-1.gif" /><!-- --></p>
+<p>And finally, let’s end where we began, by rendering the image of Marilyn Monroe as an animated spiral.</p>
+<pre class="r"><code>marilyn &lt;- readJPEG(&quot;SpiralDrawings/Marilyn.jpg&quot;) %&gt;% 
+  scale_image(radius * 2) %&gt;% 
+  spiral_cartesian(spiral_radius = radius, 
+                   num_coils     = 50, #Spiral folds on itself 50 times
+                   chord_length  = 2,  #Each point is 2 pixels apart
+                   rotation      = 0   #No rotation
+                   )  %&gt;% 
+  project_image()
+
+marilyn$projected_spiral %&gt;% 
+  mutate(row_number = row_number()^(1/2)) %&gt;% 
+  ggplot(aes(x=x, y=y, size = grey)) +
+  geom_path() + 
+  scale_size_continuous(range = c(0.1, 1.8), 
+                        guide = FALSE) +
+  coord_fixed(expand = FALSE) + 
+  theme_void() +
+  transition_reveal(1, row_number)</code></pre>
+<p><img src="/post/2018-09-10-Spirals1_files/figure-html/Marilyn-1.gif" /><!-- --></p>
+<hr />
+<p><em>Try it out! Full script can be found on <a href="https://github.com/ryantimpe/SpiralDrawings">GitHub</a>!</em></p>
+</div>
+<div class="footnotes">
+<hr />
+<ol>
+<li id="fn1"><p>The plotted spiral seems to have reflections like a vinyl record. I assume that’s from the rendering of the plot at this resolution.<a href="#fnref1">↩</a></p></li>
+<li id="fn2"><p>The <code>range</code> values in <code>scale_size_continuous()</code> will require a bit of trial &amp; error and will depend on the final size of the plotted spiral.<a href="#fnref2">↩</a></p></li>
+<li id="fn3"><p>If you’re using a Windows OS with R 3.5, you might have some trouble installing this package. I recommend reinstalling RTools, referring to <a href="https://github.com/r-lib/devtools/issues/1772">this thread</a>, and using <a href="https://github.com/ryantimpe/SpiralDrawings/blob/master/0_InstallgganimateWindows.R">this script</a>.<a href="#fnref3">↩</a></p></li>
+</ol>
+</div>

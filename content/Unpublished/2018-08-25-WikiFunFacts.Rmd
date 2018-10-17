@@ -1,0 +1,44 @@
+---
+title: 'How To: Create triva from Wikipedia'
+author: Ryan Timpe
+date: '2018-08-25'
+slug: Datasaurs1
+categories:
+  - HowTo
+  - Bots
+tags:
+  - Datasaurs
+  - R
+summary: "Short post! Using rvest and tidytext to pull setences from Wikipedia."
+header: 
+  image: "posts/Datasaurs1.jpg"
+
+---
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+library(tidyverse)
+library(rvest)
+library(tidytext)
+
+```
+
+### Datasaurs Milestone
+
+Updating the Datasaurs [Twitter bot](https://twitter.com/Datasaurs) is my go-to task when I'm in the mood to do something fun in R but not feeling particularly creative or motivated to start a new project. To celebrate the bot's 1,500th post, I decided it would be fun to add random trivia about the featured animal to the bottom of each Datasaur image.
+
+`r htmltools::HTML("{{< tweet 1033413977097871360 >}}")`
+
+### The Goal
+
+Sticking with my [brand](../../../../categories/dinosaurs/), this post is an overview of the R process behind each tweet, from processing the data, plotting the new creature, and posting the text and image on Twitter.
+
+All scripts and data used in Datasaurs can be found on my [GitHub](https://github.com/ryantimpe/datasaurs).
+
+### The Data
+
+The bot is dependent on two key inputs: silhoette images of dinosaurs (or other animals) and cause of death time series.
+
+The images are from [PhyloPic](http://phylopic.org/image/browse/). While there are some awesome [R packages](https://github.com/sckott/rphylopic) that can import images from PhyloPic, for now, I have manually curated the images used in the bot to ensure the images will work well with my goal. This also allows me to save some extra metadata with each image, including the direction the animal is facing, common family names, and the Twitter handles of the artists.
+
+The U.S. cause of death time series data is downloaded from the Center for Disease Control [Wonder database](https://wonder.cdc.gov/ucd-icd10.html). I downloaded 24 subsets of the data by age, race, gender, and region. The CDC redacts any queries that yield too few results, so I've kept these high-level.
