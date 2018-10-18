@@ -10,13 +10,13 @@ subtitle = "Data science with a sense of humor"
 widget = "posts"
 
 # Order that this section will appear in.
-weight = 7
+weight = 4
 
 # Show posts that contain the following tags. Default to any tags.
 tags = []
 
 # Number of posts to list.
-count = 5
+count = 10
 
 +++
 

@@ -74,12 +74,12 @@ custom_css = "rtcom.css"
 [[menu.main]]
   name = "Experience"
   url = "#experience"
-  weight = 2
+  weight = 3
 
 [[menu.main]]
   name = "Volunteer"
   url = "#volunteer"
-  weight = 3
+  weight = 4
 
 [[menu.main]]
   name = "Projects"
@@ -89,7 +89,7 @@ custom_css = "rtcom.css"
 [[menu.main]]
   name = "Posts"
   url = "#posts"
-  weight = 4
+  weight = 2
 
 [[menu.main]]
   name = "Contact"
