@@ -1,0 +1,52 @@
+---
+title: 'Turkey Trivia 2018'
+author: Ryan Timpe
+date: '2018-11-25'
+slug: Thanksgiving2018
+categories:
+  - Data Viz
+  - Dinosaurs
+tags:
+  - R
+summary: "Collection of turkey trivia data visualizations for Thanksgiving 2018."
+header: 
+  image: "posts/Thanksgiving2018.jpg"
+---
+
+For Thanksgiving this year, I created a few silly charts on my [Twitter account](https://twitter.com/ryantimpe) to visualize some trivia about turkeys. Below is the complete collection of tweets.
+
+<blockquote class="twitter-tweet" data-lang="en"><p lang="en" dir="ltr">Most of the <a href="https://twitter.com/hashtag/TurkeyTrivia?src=hash&amp;ref_src=twsrc%5Etfw">#TurkeyTrivia</a> is from this website, which was last updated in 2012 and has 0 citations. Already off to a strong start. <a href="https://t.co/YM2jejqrrq">https://t.co/YM2jejqrrq</a></p>&mdash; Ryan Timpe 🦖📉 (@ryantimpe) <a href="https://twitter.com/ryantimpe/status/1065289716533207045?ref_src=twsrc%5Etfw">November 21, 2018</a></blockquote>
+<script async src="https://platform.twitter.com/widgets.js" charset="utf-8"></script>
+
+<blockquote class="twitter-tweet" data-lang="en"><p lang="en" dir="ltr">That bird on your table? It was a lady bird. The turkey in your sausage, lunch meat, or burger is from a male. <a href="https://twitter.com/hashtag/TurkeyTrivia?src=hash&amp;ref_src=twsrc%5Etfw">#TurkeyTrivia</a> <a href="https://twitter.com/hashtag/dataviz?src=hash&amp;ref_src=twsrc%5Etfw">#dataviz</a> <a href="https://twitter.com/hashtag/rstats?src=hash&amp;ref_src=twsrc%5Etfw">#rstats</a> <a href="https://t.co/Fqun8ZAQiD">pic.twitter.com/Fqun8ZAQiD</a></p>&mdash; Ryan Timpe 🦖📉 (@ryantimpe) <a href="https://twitter.com/ryantimpe/status/1065290259917881350?ref_src=twsrc%5Etfw">November 21, 2018</a></blockquote>
+<script async src="https://platform.twitter.com/widgets.js" charset="utf-8"></script>
+
+<blockquote class="twitter-tweet" data-lang="en"><p lang="en" dir="ltr">Turkey sausage popularity peaked in 1996 according to Google Ngrams. Turkey burgers were still gaining in 2008. <a href="https://twitter.com/hashtag/TurkeyTrivia?src=hash&amp;ref_src=twsrc%5Etfw">#TurkeyTrivia</a> <a href="https://t.co/b5FIyvFyzH">pic.twitter.com/b5FIyvFyzH</a></p>&mdash; Ryan Timpe 🦖📉 (@ryantimpe) <a href="https://twitter.com/ryantimpe/status/1065308864449572864?ref_src=twsrc%5Etfw">November 21, 2018</a></blockquote>
+<script async src="https://platform.twitter.com/widgets.js" charset="utf-8"></script>
+
+<blockquote class="twitter-tweet" data-lang="en"><p lang="en" dir="ltr">Almost half of turkeys produced in the US end up in grocery stores. 6% are exported. <a href="https://twitter.com/hashtag/TurkeyTrivia?src=hash&amp;ref_src=twsrc%5Etfw">#TurkeyTrivia</a> <a href="https://t.co/Yuy9wTwZNc">pic.twitter.com/Yuy9wTwZNc</a></p>&mdash; Ryan Timpe 🦖📉 (@ryantimpe) <a href="https://twitter.com/ryantimpe/status/1065326481163849729?ref_src=twsrc%5Etfw">November 21, 2018</a></blockquote>
+<script async src="https://platform.twitter.com/widgets.js" charset="utf-8"></script>
+
+<blockquote class="twitter-tweet" data-lang="en"><p lang="en" dir="ltr">A whole turkey contains about 70% white meat, but white meat is only 67% of the calories. <a href="https://twitter.com/hashtag/TurkeyTriva?src=hash&amp;ref_src=twsrc%5Etfw">#TurkeyTriva</a> <a href="https://twitter.com/hashtag/DataViz?src=hash&amp;ref_src=twsrc%5Etfw">#DataViz</a> <a href="https://t.co/rDZbkoupZl">pic.twitter.com/rDZbkoupZl</a></p>&mdash; Ryan Timpe 🦖📉 (@ryantimpe) <a href="https://twitter.com/ryantimpe/status/1065341579567611904?ref_src=twsrc%5Etfw">November 21, 2018</a></blockquote>
+<script async src="https://platform.twitter.com/widgets.js" charset="utf-8"></script>
+
+<blockquote class="twitter-tweet" data-lang="en"><p lang="en" dir="ltr">Conventional wisdom says to use 3/4 cups of stuffing per pound of turkey. Empirical evidence from some top Google result recipes says you only need 1/2 cup. <a href="https://twitter.com/hashtag/TurkeyTrivia?src=hash&amp;ref_src=twsrc%5Etfw">#TurkeyTrivia</a> <a href="https://t.co/Em7QiyiEmt">pic.twitter.com/Em7QiyiEmt</a></p>&mdash; Ryan Timpe 🦖📉 (@ryantimpe) <a href="https://twitter.com/ryantimpe/status/1065356679942877185?ref_src=twsrc%5Etfw">November 21, 2018</a></blockquote>
+<script async src="https://platform.twitter.com/widgets.js" charset="utf-8"></script>
+
+<blockquote class="twitter-tweet" data-lang="en"><p lang="en" dir="ltr">You can identify the sex of a turkey by the shape of its droppings. Females poop in a J shape, while males produce spiral poop. Necessary <a href="https://twitter.com/hashtag/TurkeyTriva?src=hash&amp;ref_src=twsrc%5Etfw">#TurkeyTriva</a> that I didn&#39;t know how to plot. <a href="https://twitter.com/hashtag/rstats?src=hash&amp;ref_src=twsrc%5Etfw">#rstats</a> <a href="https://twitter.com/hashtag/dataviz?src=hash&amp;ref_src=twsrc%5Etfw">#dataviz</a> <a href="https://t.co/kguucDFON8">pic.twitter.com/kguucDFON8</a></p>&mdash; Ryan Timpe 🦖📉 (@ryantimpe) <a href="https://twitter.com/ryantimpe/status/1065379331365584897?ref_src=twsrc%5Etfw">November 21, 2018</a></blockquote>
+<script async src="https://platform.twitter.com/widgets.js" charset="utf-8"></script>
+
+<blockquote class="twitter-tweet" data-lang="en"><p lang="en" dir="ltr">At maturity, a turkey has 3,500 feathers. I really question the accuracy of this <a href="https://twitter.com/hashtag/TurkeyTrivia?src=hash&amp;ref_src=twsrc%5Etfw">#TurkeyTrivia</a>. <a href="https://t.co/8fFjoW8Zsr">pic.twitter.com/8fFjoW8Zsr</a></p>&mdash; Ryan Timpe 🦖📉 (@ryantimpe) <a href="https://twitter.com/ryantimpe/status/1065636023911120896?ref_src=twsrc%5Etfw">November 22, 2018</a></blockquote>
+<script async src="https://platform.twitter.com/widgets.js" charset="utf-8"></script>
+
+<blockquote class="twitter-tweet" data-lang="en"><p lang="en" dir="ltr">A turkey can fly short distances up to 55mph and can run up to 20mph. <a href="https://twitter.com/hashtag/TurkeyTrivia?src=hash&amp;ref_src=twsrc%5Etfw">#TurkeyTrivia</a> <a href="https://t.co/eCiiSO3yiz">pic.twitter.com/eCiiSO3yiz</a></p>&mdash; Ryan Timpe 🦖📉 (@ryantimpe) <a href="https://twitter.com/ryantimpe/status/1065653636859080704?ref_src=twsrc%5Etfw">November 22, 2018</a></blockquote>
+<script async src="https://platform.twitter.com/widgets.js" charset="utf-8"></script>
+
+<blockquote class="twitter-tweet" data-lang="en"><p lang="en" dir="ltr">Turkeys evolved 11 million years ago, so <a href="https://twitter.com/SUEtheTrex?ref_src=twsrc%5Etfw">@SUEtheTrex</a> never celebrated Thanksgiving properly. They did have plenty of other poultry options though! <a href="https://twitter.com/hashtag/TurkeyTrivia?src=hash&amp;ref_src=twsrc%5Etfw">#TurkeyTrivia</a> <a href="https://twitter.com/hashtag/Dinovember?src=hash&amp;ref_src=twsrc%5Etfw">#Dinovember</a> <a href="https://twitter.com/hashtag/rstats?src=hash&amp;ref_src=twsrc%5Etfw">#rstats</a> <a href="https://t.co/DyWkIzvB8W">pic.twitter.com/DyWkIzvB8W</a></p>&mdash; Ryan Timpe 🦖📉 (@ryantimpe) <a href="https://twitter.com/ryantimpe/status/1065673769358811137?ref_src=twsrc%5Etfw">November 22, 2018</a></blockquote>
+<script async src="https://platform.twitter.com/widgets.js" charset="utf-8"></script>
+
+<blockquote class="twitter-tweet" data-lang="en"><p lang="en" dir="ltr">Real velociraptors were actually the size of turkeys, not 6ft tall as in Jurassic Park. They were also covered in feathers! <a href="https://twitter.com/hashtag/TurkeyTrivia?src=hash&amp;ref_src=twsrc%5Etfw">#TurkeyTrivia</a> <a href="https://twitter.com/hashtag/DataViz?src=hash&amp;ref_src=twsrc%5Etfw">#DataViz</a> <a href="https://twitter.com/hashtag/rstats?src=hash&amp;ref_src=twsrc%5Etfw">#rstats</a> <a href="https://t.co/BIxJzt7LEQ">pic.twitter.com/BIxJzt7LEQ</a></p>&mdash; Ryan Timpe 🦖📉 (@ryantimpe) <a href="https://twitter.com/ryantimpe/status/1065692643215192065?ref_src=twsrc%5Etfw">November 22, 2018</a></blockquote>
+<script async src="https://platform.twitter.com/widgets.js" charset="utf-8"></script>
+
+
+
