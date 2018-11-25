@@ -1,0 +1,602 @@
+---
+title: 'Using machine learning to estimate where museum Instagram posts were taken'
+author: Ryan Timpe
+date: '2018-11-21'
+slug: Peabody-insta2
+categories:
+  - Peabody Museum
+  - Data Viz
+tags:
+  - Age of Reptiles
+  - R
+summary: 'Follow-up to analysis of Instagram posts tagged at the Peabody Museum. Combining image and text analysis to locate images within the museum.'
+header: 
+  image: "posts/PeabodyInsta2.jpg"
+---
+
+<script src="/rmarkdown-libs/kePrint/kePrint.js"></script>
+<script src="/rmarkdown-libs/htmlwidgets/htmlwidgets.js"></script>
+<link href="/rmarkdown-libs/wordcloud2/wordcloud.css" rel="stylesheet" />
+<script src="/rmarkdown-libs/wordcloud2/wordcloud2-all.js"></script>
+<script src="/rmarkdown-libs/wordcloud2/hover.js"></script>
+<script src="/rmarkdown-libs/wordcloud2-binding/wordcloud2.js"></script>
+
+
+<div id="introduction" class="section level1">
+<h1>Introduction</h1>
+<p>A few months ago, I wrote a post using Google Cloud Vision AI to examine Instagram photos taken at the Yale Peabody Museum. Using cluster analysis and principal component analysis, this work provided the museum staff with a few ways to <em>think</em> about how museum guests interact with the exhibits through social media. One problem, however, is that the analysis didn’t reach any conclusions, nor did it clearly answer a key question: which exhibits on social media are most popular with museum guests?</p>
+<p>More than ever, this question is crucial for the museum to understand. Edward P Bass just pledged a <a href="https://news.yale.edu/2018/08/28/edward-p-bass-67-makes-lead-gift-toward-renovating-yale-peabody-museum">$160 million dollar donation</a> toward the renovation of the museum. With this, the museum will be doubling its floor space and rebuilding every exhibit.</p>
+</div>
+<div id="goal" class="section level1">
+<h1>Goal</h1>
+<p><strong>Which exhibits in the Yale Peabody Museum do guests most engage with on Instagram?</strong></p>
+<p>This post is less technical than the previous post, focusing more on insights from the analysis.</p>
+</div>
+<div id="slides" class="section level1">
+<h1>Slides</h1>
+<p>A few weeks ago I presented these results to a small group of volunteers and staff members at the museum. <a href="http://www.ryantimpe.com/files/4_SelfiesWithTheTorosaurus.html#/section">Check out the slides</a>… this post will be a selection of some of the highlights.</p>
+<div id="which-exhibits-are-guest-talking-about" class="section level2">
+<h2>Which exhibits are guest talking about?</h2>
+<p>One way to understand which exhibits guests are posting on Instagram is to examine the text in their captions. This quick analysis suggests that the dinosaur and mineral halls are the most popular exhibits.</p>
+<table class="table" style="font-size: 16px; margin-left: auto; margin-right: auto;">
+<thead>
+<tr>
+<th style="text-align:left;">
+Word
+</th>
+<th style="text-align:right;">
+Num Posts
+</th>
+<th style="text-align:left;">
+</th>
+<th style="text-align:left;">
+Word
+</th>
+<th style="text-align:right;">
+Num Posts
+</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align:left;">
+<span style=" font-weight: bold;    color: #268bd2;">dinosaur</span>
+</td>
+<td style="text-align:right;">
+508
+</td>
+<td style="text-align:left;">
+</td>
+<td style="text-align:left;">
+<span style=" font-weight: bold;    color: #268bd2;">triceratops</span>
+</td>
+<td style="text-align:right;">
+43
+</td>
+</tr>
+<tr>
+<td style="text-align:left;">
+<span style=" font-weight: bold;    color: #268bd2;">mineral</span>
+</td>
+<td style="text-align:right;">
+193
+</td>
+<td style="text-align:left;">
+</td>
+<td style="text-align:left;">
+<span style=" font-weight: bold;    color: #268bd2;">bear</span>
+</td>
+<td style="text-align:right;">
+41
+</td>
+</tr>
+<tr>
+<td style="text-align:left;">
+<span style=" font-weight: bold;    color: #268bd2;">rock</span>
+</td>
+<td style="text-align:right;">
+138
+</td>
+<td style="text-align:left;">
+</td>
+<td style="text-align:left;">
+<span style=" font-weight: bold;    color: #268bd2;">turtle</span>
+</td>
+<td style="text-align:right;">
+33
+</td>
+</tr>
+<tr>
+<td style="text-align:left;">
+<span style=" font-weight: bold;    color: #268bd2;">bird</span>
+</td>
+<td style="text-align:right;">
+103
+</td>
+<td style="text-align:left;">
+</td>
+<td style="text-align:left;">
+<span style=" font-weight: bold;    color: #268bd2;">brontosaurus</span>
+</td>
+<td style="text-align:right;">
+29
+</td>
+</tr>
+<tr>
+<td style="text-align:left;">
+<span style=" font-weight: bold;    color: #268bd2;">quartz</span>
+</td>
+<td style="text-align:right;">
+52
+</td>
+<td style="text-align:left;">
+</td>
+<td style="text-align:left;">
+<span style=" font-weight: bold;    color: #268bd2;">mummy</span>
+</td>
+<td style="text-align:right;">
+28
+</td>
+</tr>
+<tr>
+<td style="text-align:left;">
+<span style=" font-weight: bold;    color: #268bd2;">torosaurus</span>
+</td>
+<td style="text-align:right;">
+45
+</td>
+<td style="text-align:left;">
+</td>
+<td style="text-align:left;">
+<span style=" font-weight: bold;    color: #268bd2;">tyrannosaurus</span>
+</td>
+<td style="text-align:right;">
+18
+</td>
+</tr>
+<tr>
+<td style="text-align:left;">
+<span style=" font-weight: bold;    color: #268bd2;">squid</span>
+</td>
+<td style="text-align:right;">
+44
+</td>
+<td style="text-align:left;">
+</td>
+<td style="text-align:left;">
+<span style=" font-weight: bold;    color: #268bd2;">stegosaurus</span>
+</td>
+<td style="text-align:right;">
+6
+</td>
+</tr>
+</tbody>
+</table>
+<p>The counts of each of these key words are relatively low for our sample size of 3,500 posts.</p>
+</div>
+<div id="image-contents-with-google-cloud-vision" class="section level2">
+<h2>Image contents with Google Cloud Vision</h2>
+<p>As discussed in the previous post, Google Cloud Vision uses artificial intelligence to guess the contents of each image. This allows us to study each post, even if the guest did not provide a helpful caption.</p>
+<p>For each of the 3,500 images, I collected up to the top six labels (some images have fewer). Below are the top 200 labels.</p>
+<div id="htmlwidget-1" style="width:672px;height:480px;" class="wordcloud2 html-widget"></div>
+<script type="application/json" data-for="htmlwidget-1">{"x":{"word":["tourist attraction","dinosaur","tree","museum","fun","mineral","sculpture","tyrannosaurus","girl","crystal","fauna","art","building","organism","product","statue","sky","square","smile","monument","skeleton","plant","snout","facade","velociraptor","jaw","recreation","window","computer wallpaper","black and white","quartz","grass","extinction","fossil","beak","font","child","vacation","wildlife","photography","jewellery","darkness","glasses","arch","bird","landmark","selfie","architecture","vision care","bone","monochrome","monochrome photography","stock photography","rock","skull","head","mammal","artwork","eyewear","facial hair","ceiling","feather","tourism","purple","design","event","glass","interior design","water","wood","arm","branch","snapshot","memorial","sunglasses","visual arts","day","carving","house","flooring","terrestrial animal","face","forehead","furniture","ice","headgear","daylighting","gemstone","neck","green","medieval architecture","metal","city","cool","emerald","horn","human behavior","night","nose","structure","turquoise","space","carnivoran","pattern","wall",null,"friendship","artifact","shoulder","still life photography","table","winter","facial expression","flower","illustration","fur","painting","stone carving","floor","hair","toddler","ancient history","cathedral","symmetry","text","black","close up","outerwear","twig","hairstyle","hand","human","temple","advertising","freezing","invertebrate","landscape","lighting","fashion accessory","light","people","place of worship","blue","leaf","shoe","angle","history","technology","wing","emotion","beauty","eye","flora","polar bear","bear","modern art","macro photography","water bird","fashion","food","frost","happiness","person","insect","photograph","pink","ear","gothic architecture","grizzly bear","play","street","violet","drawing","eyebrow","family","human hair color","spring","art gallery","chin","finger","historic site","standing","arcade","church","exhibition","sheep","snow","beard","bird of prey","cheek","classical sculpture","communication","joint","cuisine","woody plant","garden","relief","spire","black hair","reptile"],"freq":[571,516,476,466,443,415,377,340,333,331,321,312,307,307,299,265,254,244,215,213,207,188,183,174,171,166,163,158,151,146,134,130,129,128,125,124,123,123,122,121,120,113,112,111,110,109,109,105,105,104,104,104,104,102,97,95,95,87,87,85,83,83,83,77,76,76,76,76,76,76,75,75,75,71,70,70,69,68,68,67,67,66,66,66,65,64,63,63,63,62,62,62,61,61,61,61,61,61,61,61,61,59,58,58,58,58,57,56,56,56,56,56,55,55,52,51,51,51,50,50,50,49,49,48,48,47,47,47,47,46,46,46,46,45,45,45,45,45,44,44,44,44,43,43,43,42,41,41,41,40,38,38,38,38,37,37,36,36,35,35,35,35,35,34,34,34,33,33,33,33,33,33,32,32,32,32,32,31,31,31,31,31,30,29,29,29,29,28,28,28,28,28,28,27,27,26,26,26,25,25],"fontFamily":"Segoe UI","fontWeight":"bold","color":["#d33682","#d33682","#d33682","#d33682","#d33682","#d33682","#d33682","#d33682","#d33682","#d33682","#268bd2","#268bd2","#268bd2","#268bd2","#268bd2","#268bd2","#268bd2","#268bd2","#268bd2","#268bd2","#268bd2","#268bd2","#268bd2","#268bd2","#268bd2","#268bd2","#268bd2","#268bd2","#268bd2","#268bd2","#002b36","#002b36","#002b36","#002b36","#002b36","#002b36","#002b36","#002b36","#002b36","#002b36","#002b36","#002b36","#002b36","#002b36","#002b36","#002b36","#002b36","#002b36","#002b36","#002b36","#002b36","#002b36","#002b36","#002b36","#002b36","#002b36","#002b36","#002b36","#002b36","#002b36","#002b36","#002b36","#002b36","#002b36","#002b36","#002b36","#002b36","#002b36","#002b36","#002b36","#002b36","#002b36","#002b36","#002b36","#002b36","#002b36","#002b36","#002b36","#002b36","#002b36","#002b36","#002b36","#002b36","#002b36","#002b36","#002b36","#002b36","#002b36","#002b36","#002b36","#002b36","#002b36","#002b36","#002b36","#002b36","#002b36","#002b36","#002b36","#002b36","#002b36","#002b36","#002b36","#002b36","#002b36","#002b36","#002b36","#002b36","#002b36","#002b36","#002b36","#002b36","#002b36","#002b36","#002b36","#002b36","#002b36","#002b36","#002b36","#002b36","#002b36","#002b36","#002b36","#002b36","#002b36","#002b36","#002b36","#002b36","#002b36","#002b36","#002b36","#002b36","#002b36","#002b36","#002b36","#002b36","#002b36","#002b36","#002b36","#002b36","#002b36","#002b36","#002b36","#002b36","#002b36","#002b36","#002b36","#002b36","#002b36","#002b36","#002b36","#002b36","#002b36","#002b36","#002b36","#002b36","#002b36","#002b36","#002b36","#002b36","#002b36","#002b36","#002b36","#002b36","#002b36","#002b36","#002b36","#002b36","#002b36","#002b36","#002b36","#002b36","#002b36","#002b36","#002b36","#002b36","#002b36","#002b36","#002b36","#002b36","#002b36","#002b36","#002b36","#002b36","#002b36","#002b36","#002b36","#002b36","#002b36","#002b36","#002b36","#002b36","#002b36","#002b36","#002b36","#002b36","#002b36","#002b36","#002b36","#002b36","#002b36"],"minSize":0,"weightFactor":0.157618213660245,"backgroundColor":"white","gridSize":0,"minRotation":-0.785398163397448,"maxRotation":0.785398163397448,"shuffle":true,"rotateRatio":0.4,"shape":"circle","ellipticity":0.65,"figBase64":null,"hover":null},"evals":[],"jsHooks":{"render":[{"code":"function(el,x){\n                        console.log(123);\n                        if(!iii){\n                          window.location.reload();\n                          iii = False;\n\n                        }\n  }","data":null}]}}</script>
+<p>Again, here we see ‘dinosaur’ and ‘mineral’ as some of the top labels. There are also labels for specific dinosaurs, ‘sculpture’ in reference to the Torosaurus statue outside the museum, and then labels associated with portraits of people and selfies.</p>
+</div>
+<div id="cluster-analysis" class="section level2">
+<h2>Cluster Analysis</h2>
+<p>I then perform cluster analysis on these Instagram posts, grouping images with similar Cloud Vision labels into eleven unique clusters. This analysis is slightly different than the version I completed in July, due to the increase in special events at the museum. I now find that 11 is the optimal number of clusters and there’s no longer the large “Exhibits &amp; other” cluster.</p>
+<table class="table" style="font-size: 16px; margin-left: auto; margin-right: auto;">
+<thead>
+<tr>
+<th style="text-align:left;">
+Cluster
+</th>
+<th style="text-align:left;">
+%
+</th>
+<th style="text-align:left;">
+</th>
+<th style="text-align:left;">
+Cluster
+</th>
+<th style="text-align:left;">
+%
+</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align:left;">
+<span style=" font-weight: bold;    color: #d33682;">Fossil Halls</span>
+</td>
+<td style="text-align:left;">
+47%
+</td>
+<td style="text-align:left;">
+</td>
+<td style="text-align:left;">
+<span style=" font-weight: bold;    color: #d33682;">B&amp;W Photography</span>
+</td>
+<td style="text-align:left;">
+3%
+</td>
+</tr>
+<tr>
+<td style="text-align:left;">
+<span style=" font-weight: bold;    color: #d33682;">Mineral Hall</span>
+</td>
+<td style="text-align:left;">
+11%
+</td>
+<td style="text-align:left;">
+</td>
+<td style="text-align:left;">
+<span style=" font-weight: bold;    color: #d33682;">Selfies</span>
+</td>
+<td style="text-align:left;">
+3%
+</td>
+</tr>
+<tr>
+<td style="text-align:left;">
+<span style=" font-weight: bold;    color: #d33682;">Families</span>
+</td>
+<td style="text-align:left;">
+10%
+</td>
+<td style="text-align:left;">
+</td>
+<td style="text-align:left;">
+<span style=" font-weight: bold;    color: #d33682;">Outdoor Architecture</span>
+</td>
+<td style="text-align:left;">
+3%
+</td>
+</tr>
+<tr>
+<td style="text-align:left;">
+<span style=" font-weight: bold;    color: #d33682;">Birds / Diorama</span>
+</td>
+<td style="text-align:left;">
+9%
+</td>
+<td style="text-align:left;">
+</td>
+<td style="text-align:left;">
+<span style=" font-weight: bold;    color: #d33682;">Indoor Architecture</span>
+</td>
+<td style="text-align:left;">
+2%
+</td>
+</tr>
+<tr>
+<td style="text-align:left;">
+<span style=" font-weight: bold;    color: #d33682;">Art &amp; Scultpure</span>
+</td>
+<td style="text-align:left;">
+7%
+</td>
+<td style="text-align:left;">
+</td>
+<td style="text-align:left;">
+<span style=" font-weight: bold;    color: #d33682;">Food</span>
+</td>
+<td style="text-align:left;">
+1%
+</td>
+</tr>
+<tr>
+<td style="text-align:left;">
+<span style=" font-weight: bold;    color: #d33682;">Torosaurus</span>
+</td>
+<td style="text-align:left;">
+5%
+</td>
+<td style="text-align:left;">
+</td>
+<td style="text-align:left;">
+</td>
+<td style="text-align:left;">
+</td>
+</tr>
+</tbody>
+</table>
+</div>
+<div id="principal-component-analsyis" class="section level2">
+<h2>Principal Component Analsyis</h2>
+<p>PCA is a way to understand the biggest <em>differences</em> between Instagram posts using the Cloud Vision labels. For each principal component, each label gets a positive, negative, or near-zero score. I then curate these positive and negative scores in the context of the museum to understand the variance between posts.</p>
+<p>Below is a sample of 10 of the more sensible components.</p>
+<table class="table" style="font-size: 16px; margin-left: auto; margin-right: auto;">
+<thead>
+<tr>
+<th style="text-align:left;">
+Like this…
+</th>
+<th style="text-align:left;">
+… or this?
+</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align:left;">
+<span style=" font-weight: bold;    ">Selfies &amp; people</span>
+</td>
+<td style="text-align:left;">
+<span style=" font-weight: bold;    ">Objects</span>
+</td>
+</tr>
+<tr>
+<td style="text-align:left;">
+<span style=" font-weight: bold;    ">Man-made</span>
+</td>
+<td style="text-align:left;">
+<span style=" font-weight: bold;    ">Natural</span>
+</td>
+</tr>
+<tr>
+<td style="text-align:left;">
+<span style=" font-weight: bold;    ">Insects &amp; flowers</span>
+</td>
+<td style="text-align:left;">
+<span style=" font-weight: bold;    ">Dinosaurs</span>
+</td>
+</tr>
+<tr>
+<td style="text-align:left;">
+<span style=" font-weight: bold;    ">Minerals</span>
+</td>
+<td style="text-align:left;">
+<span style=" font-weight: bold;    ">Dioramas</span>
+</td>
+</tr>
+<tr>
+<td style="text-align:left;">
+<span style=" font-weight: bold;    ">Non-living</span>
+</td>
+<td style="text-align:left;">
+<span style=" font-weight: bold;    ">Living</span>
+</td>
+</tr>
+<tr>
+<td style="text-align:left;">
+<span style=" font-weight: bold;    ">Carvings</span>
+</td>
+<td style="text-align:left;">
+<span style=" font-weight: bold;    ">Natural</span>
+</td>
+</tr>
+<tr>
+<td style="text-align:left;">
+<span style=" font-weight: bold;    ">Outside</span>
+</td>
+<td style="text-align:left;">
+<span style=" font-weight: bold;    ">Inside</span>
+</td>
+</tr>
+<tr>
+<td style="text-align:left;">
+<span style=" font-weight: bold;    ">Birds</span>
+</td>
+<td style="text-align:left;">
+<span style=" font-weight: bold;    ">Mammals</span>
+</td>
+</tr>
+<tr>
+<td style="text-align:left;">
+<span style=" font-weight: bold;    ">Events</span>
+</td>
+<td style="text-align:left;">
+<span style=" font-weight: bold;    ">Non-events</span>
+</td>
+</tr>
+<tr>
+<td style="text-align:left;">
+<span style=" font-weight: bold;    ">Modern architecture</span>
+</td>
+<td style="text-align:left;">
+<span style=" font-weight: bold;    ">Gothic architecture</span>
+</td>
+</tr>
+</tbody>
+</table>
+</div>
+</div>
+<div id="mapping-the-instagram-posts" class="section level1">
+<h1>Mapping the Instagram posts</h1>
+<p>I combine all the analyses for each Instagram post - caption text analysis, cluster analysis, and principal components - to estimate the location of the post within the museum. Each post is allocated to one of 15 rooms/exhibits in the museum or an ‘Events’ category. The percentages below are estimates and likely have significant error bars in either direction.</p>
+<div id="first-floor-insights" class="section level2">
+<h2>First Floor insights</h2>
+<ol style="list-style-type: decimal">
+<li>The guest experience begins before they enter the museum</li>
+<li>People like dinosaurs… of course</li>
+<li>Changing &amp; new exhibits drive engagement</li>
+<li>No love for the Mastodon!</li>
+</ol>
+<p><img src="/post/2018-11-21-PeabodyInsta2_files/figure-html/map_1c-1.png" width="576" /></p>
+</div>
+<div id="second-floor-insights" class="section level2">
+<h2>Second Floor insights</h2>
+<ol style="list-style-type: decimal">
+<li>The lobby (squid &amp; arches) is part of the museum experience</li>
+<li>Guests put down their phones in the Discovery room… but they love the ants and walking sticks</li>
+</ol>
+<p><img src="/post/2018-11-21-PeabodyInsta2_files/figure-html/map_2c-1.png" width="576" /></p>
+</div>
+<div id="third-floor-insights" class="section level2">
+<h2>Third Floor insights</h2>
+<ol style="list-style-type: decimal">
+<li>The minerals in the David Friend Hall make great photos</li>
+<li>Guests like the dioramas, the bears, &amp; the dodo</li>
+<li>Events (MLK, Fiesta, Bones &amp; Beer, birthdays) drive posts</li>
+<li>Space and Connecticut geology galleries lack engagement</li>
+</ol>
+<p><img src="/post/2018-11-21-PeabodyInsta2_files/figure-html/map_3c-1.png" width="576" /></p>
+</div>
+<div id="popular-exhibits" class="section level2">
+<h2>Popular Exhibits</h2>
+<p>Share of photos taken in each exhibit hall.</p>
+<table class="table" style="font-size: 16px; margin-left: auto; margin-right: auto;">
+<thead>
+<tr>
+<th style="text-align:left;">
+Exhibit
+</th>
+<th style="text-align:left;">
+% Posts
+</th>
+<th style="text-align:left;">
+</th>
+<th style="text-align:left;">
+Exhibit
+</th>
+<th style="text-align:left;">
+% Posts
+</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align:left;">
+Great Hall
+</td>
+<td style="text-align:left;">
+38%
+</td>
+<td style="text-align:left;">
+</td>
+<td style="text-align:left;">
+Ancient Egypt
+</td>
+<td style="text-align:left;">
+2%
+</td>
+</tr>
+<tr>
+<td style="text-align:left;">
+David Friend
+</td>
+<td style="text-align:left;">
+17%
+</td>
+<td style="text-align:left;">
+</td>
+<td style="text-align:left;">
+Anthropology
+</td>
+<td style="text-align:left;">
+&lt; 2%
+</td>
+</tr>
+<tr>
+<td style="text-align:left;">
+Cretaceous Garden
+</td>
+<td style="text-align:left;">
+9%
+</td>
+<td style="text-align:left;">
+</td>
+<td style="text-align:left;">
+Discovery Room
+</td>
+<td style="text-align:left;">
+&lt; 2%
+</td>
+</tr>
+<tr>
+<td style="text-align:left;">
+Temporary Gallery
+</td>
+<td style="text-align:left;">
+8%
+</td>
+<td style="text-align:left;">
+</td>
+<td style="text-align:left;">
+Squid
+</td>
+<td style="text-align:left;">
+&lt; 2%
+</td>
+</tr>
+<tr>
+<td style="text-align:left;">
+Dioramas
+</td>
+<td style="text-align:left;">
+7%
+</td>
+<td style="text-align:left;">
+</td>
+<td style="text-align:left;">
+Mammal Hall
+</td>
+<td style="text-align:left;">
+&lt; 2%
+</td>
+</tr>
+<tr>
+<td style="text-align:left;">
+Connecticut Birds
+</td>
+<td style="text-align:left;">
+6%
+</td>
+<td style="text-align:left;">
+</td>
+<td style="text-align:left;">
+NE Dioramas
+</td>
+<td style="text-align:left;">
+&lt; 2%
+</td>
+</tr>
+<tr>
+<td style="text-align:left;">
+Entrance
+</td>
+<td style="text-align:left;">
+3%
+</td>
+<td style="text-align:left;">
+</td>
+<td style="text-align:left;">
+Earth &amp; Space
+</td>
+<td style="text-align:left;">
+&lt; 2%
+</td>
+</tr>
+<tr>
+<td style="text-align:left;">
+Event
+</td>
+<td style="text-align:left;">
+3%
+</td>
+<td style="text-align:left;">
+</td>
+<td style="text-align:left;">
+Native American
+</td>
+<td style="text-align:left;">
+&lt; 2%
+</td>
+</tr>
+</tbody>
+</table>
+</div>
+</div>
+<div id="why-is-this-important" class="section level1">
+<h1>Why is this important?</h1>
+<ul>
+<li><p>Every Instagram post by a guest is a mini advertisement for the museum.</p></li>
+<li><p>Social media posts about great experiences at the Peabody will inspire more people to visit.</p></li>
+<li><p>A dynamic museum experience will encourage guests to return.</p></li>
+<li><p>The museum has limited space. If guests aren’t engaging with a hall, perhaps we can do better.</p></li>
+<li><p>Comments on social media posts can provide insights on guest sentiment.</p></li>
+</ul>
+<hr />
+<p><em>Learn more about the <a href="http://peabody.yale.edu/">Peabody Museum</a>. Also check out my <a href="../../../../tags/age-of-reptiles">series of posts</a> on the data behind the Age of Reptiles mural.</em></p>
+</div>

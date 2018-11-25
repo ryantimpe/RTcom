@@ -1,0 +1,317 @@
+---
+title: 'Using machine learning to estimate where museum Instagram posts were taken'
+author: Ryan Timpe
+date: '2018-11-21'
+slug: Peabody-insta2
+categories:
+  - Peabody Museum
+  - Data Viz
+tags:
+  - Age of Reptiles
+  - R
+summary: 'Follow-up to analysis of Instagram posts tagged at the Peabody Museum. Combining image and text analysis to locate images within the museum.'
+header: 
+  image: "posts/PeabodyInsta2.jpg"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE, warning=FALSE, message=FALSE)
+
+set.seed(12334)
+
+#Libraries for analysis 
+library(tidyverse); library(tidytext)
+
+#PCA libraries 
+library(scales); library(irlba);
+library(broom)
+
+#Tables
+options(knitr.table.format = "html") 
+options(kableExtra.auto_format = FALSE)
+options(knitr.kable.NA = '')
+
+library(kableExtra)
+
+dat <- readRDS("PeabodyInsta/Post2/oct_data.RDS")
+```
+
+# Introduction
+
+A few months ago, I wrote a post using Google Cloud Vision AI to examine Instagram photos taken at the Yale Peabody Museum. Using cluster analysis and principal component analysis, this work provided the museum staff with a few ways to *think* about how museum guests interact with the exhibits through social media. One problem, however, is that the analysis didn't reach any conclusions, nor did it clearly answer a key question: which exhibits on social media are most popular with museum guests?
+
+More than ever, this question is crucial for the museum to understand. Edward P Bass just pledged a [$160 million dollar donation](https://news.yale.edu/2018/08/28/edward-p-bass-67-makes-lead-gift-toward-renovating-yale-peabody-museum) toward the renovation of the museum. With this, the museum will be doubling its floor space and rebuilding every exhibit.
+
+# Goal
+
+**Which exhibits in the Yale Peabody Museum do guests most engage with on Instagram?**
+
+This post is less technical than the previous post, focusing more on insights from the analysis.
+
+# Slides
+
+A few weeks ago I presented these results to a small group of volunteers and staff members at the museum. [Check out the slides](http://www.ryantimpe.com/files/4_SelfiesWithTheTorosaurus.html#/section)... this post will be a selection of some of the highlights.
+
+## Which exhibits are guest talking about?
+
+One way to understand which exhibits guests are posting on Instagram is to examine the text in their captions. This quick analysis suggests that the dinosaur and mineral halls are the most popular exhibits.
+
+```{r text_2, echo=FALSE, warning=FALSE, message=FALSE}
+fossils <- dat %>% 
+  unnest(Tags) %>% 
+  select(-CloudLogo, -CloudVision, -XPKeywords) %>% 
+  unnest_tokens(word, XPComment) %>% 
+  anti_join(stop_words) %>% 
+  filter(str_detect(word, "saur|dino|bird|turtle|bear|tricer|squid|mummy|rock|mineral|quartz")) %>% 
+  filter(!str_detect(word, "selfie")) %>% 
+  mutate(word = case_when(
+    str_detect(word, "dino") ~ "dinosaur", 
+    str_detect(word, "bird") ~ "bird",
+    str_detect(word, "squid") ~ "squid",
+    str_detect(word, "turtle|archelon") ~ "turtle",
+    str_detect(word, "bear") ~ "bear",
+    str_detect(word, "tyrann|tyrr") ~ "tyrannosaurus",
+    str_detect(word, "bront|apato|sauropod") ~ "brontosaurus",
+    str_detect(word, "mineral") ~ "mineral",
+    str_detect(word, "rock") ~ "rock",
+    TRUE ~ word)) %>% 
+  distinct() %>% 
+  count(word, sort = TRUE) %>% 
+  mutate(word = text_spec(word, color = "#268bd2", bold = TRUE))
+
+fossils %>%
+  head(7) %>% 
+  mutate(` `="") %>%
+  rename(Word = word, `Num Posts` = n) %>% 
+  bind_cols(
+    fossils[8:14,] %>% 
+      rename(`Word ` = word, `Num Posts ` = n) 
+  ) %>% 
+  knitr::kable(escape = FALSE) %>%
+  kable_styling(font_size = 16)
+```
+
+The counts of each of these key words are relatively low for our sample size of 3,500 posts.
+
+## Image contents with Google Cloud Vision
+
+As discussed in the previous post, Google Cloud Vision uses artificial intelligence to guess the contents of each image. This allows us to study each post, even if the guest did not provide a helpful caption.
+
+For each of the 3,500 images, I collected up to the top six labels (some images have fewer). Below are the top 200 labels.
+
+```{r wordcloud, echo=FALSE, warning=FALSE, message=FALSE}
+
+library(wordcloud2)
+
+dat %>% 
+  unnest(CloudVision) %>% 
+  count(description, sort = TRUE) %>% 
+  head(200) %>% 
+  wordcloud2(size = 0.5,
+    color = c(rep('#d33682', 10), rep('#268bd2', 20), rep('#002b36', 170)))
+```
+
+Again, here we see 'dinosaur' and 'mineral' as some of the top labels. There are also labels for specific dinosaurs, 'sculpture' in reference to the Torosaurus statue outside the museum, and then labels associated with portraits of people and selfies.
+
+## Cluster Analysis
+
+I then perform cluster analysis on these Instagram posts, grouping images with similar Cloud Vision labels into eleven unique clusters. This analysis is slightly different than the version I completed in July, due to the increase in special events at the museum. I now find that 11 is the optimal number of clusters and there's no longer the large "Exhibits & other" cluster.
+
+```{r clusters1, echo=FALSE}
+clusters <- dat %>% 
+  count(cluster_name) %>% 
+  mutate(cluster_name = ifelse(cluster_name == "Great Hall", "Fossil Halls", cluster_name)) %>% 
+  mutate(cluster_name = text_spec(cluster_name, color = "#d33682", bold = TRUE)) %>% 
+  mutate(perc = n / sum(n)) %>% 
+  mutate(perc2 = scales::percent(perc, accuracy = 1)) %>% 
+  arrange(desc(n))
+
+clusters[1:6, ] %>%
+  select(Cluster = cluster_name, `%` = perc2) %>% 
+  mutate(` `= " ") %>% 
+  bind_cols(
+    clusters[7:11, ] %>%
+      bind_rows(tibble(cluster_name = "")) %>% 
+      select(`Cluster ` = cluster_name, `% ` = perc2)) %>% 
+  knitr::kable(escape = FALSE) %>%
+  kable_styling(font_size = 16)
+```
+
+## Principal Component Analsyis
+
+PCA is a way to understand the biggest *differences* between Instagram posts using the Cloud Vision labels. For each principal component, each label gets a positive, negative, or near-zero score. I then curate these positive and negative scores in the context of the museum to understand the variance between posts.
+
+Below is a sample of 10 of the more sensible components.
+
+```{r pca_labels, echo = FALSE, warning=FALSE, message=FALSE}
+pca_labels <- readRDS("PeabodyInsta/Post2/oct_pca_labels.RDS")
+
+pca_labels %>% 
+  filter(row_number() %in% c(1:3, 5:9, 11, 15)) %>% 
+  mutate(PC_label_neg = text_spec(PC_label_neg,  bold = TRUE),
+         PC_label_pos = text_spec(PC_label_pos,  bold = TRUE)) %>% 
+  select(`Like this...` = PC_label_neg, `... or this?` = PC_label_pos) %>% 
+  knitr::kable(escape = FALSE) %>%
+  kable_styling(font_size = 16)
+
+```
+
+# Mapping the Instagram posts
+
+I combine all the analyses for each Instagram post - caption text analysis, cluster analysis, and principal components - to estimate the location of the post within the museum. Each post is allocated to one of 15 rooms/exhibits in the museum or an 'Events' category. The percentages below are estimates and likely have significant error bars in either direction.
+
+```{r map_all, echo=FALSE, message=FALSE, warning=FALSE, fig.width=8, fig.height=4}
+exhibs_plot <- readRDS("PeabodyInsta/Post2/oct_YPMmap_data.RDS")
+ypm_full_map <- readRDS("PeabodyInsta/Post2/YPMmap.RDS")
+
+```
+
+## First Floor insights
+
+1. The guest experience begins before they enter the museum
+2. People like dinosaurs... of course
+3. Changing & new exhibits drive engagement
+4. No love for the Mastodon!
+
+```{r map_1c, echo=FALSE, message=FALSE, warning=FALSE, fig.width=6, fig.height=4}
+ypm_full_map%>% 
+  filter(Floor == 1) %>% 
+  ggplot(aes(x=x, y=y, fill = color)) +
+  geom_raster() +
+  scale_fill_identity() +
+  geom_point(data = exhibs_plot %>% mutate(x = ifelse(Floor != 1, NA, x)),
+             aes(color = Exhib), size = 2, alpha = 0.5) +
+  scale_color_discrete( l = seq(50, 21, length.out = length(unique(exhibs_plot$Exhib)))) +
+  geom_label(data = data.frame(x=525, y=40, color=NA), label = "1", color = "#eee8d5", 
+             fill = "#002b36", size = 5) +
+  geom_label(data = data.frame(x=140, y=40, color=NA), label = "1", color = "#eee8d5", 
+             fill = "#002b36", size = 5) +
+  geom_label(data = data.frame(x=440, y=300, color=NA), label = "2", color = "#eee8d5", 
+             fill = "#002b36", size = 5) +
+  geom_label(data = data.frame(x=440, y=150, color=NA), label = "3", color = "#eee8d5", 
+             fill = "#002b36", size = 5) +
+  geom_label(data = data.frame(x=125, y=375, color=NA), label = "3", color = "#eee8d5", 
+             fill = "#002b36", size = 5) +
+  geom_label(data = data.frame(x=680, y=250, color=NA), label = "4", color = "#eee8d5", 
+             fill = "#002b36", size = 5) +
+  coord_fixed(expand = FALSE) +
+  theme_void() +
+  theme(
+    strip.text = element_blank(),
+    legend.position = "bottom"
+  )
+
+```
+
+## Second Floor insights
+
+1. The lobby (squid & arches) is part of the museum experience
+2. Guests put down their phones in the Discovery room...
+    but they love the ants and walking sticks
+
+```{r map_2c, echo=FALSE, message=FALSE, warning=FALSE, fig.width=6, fig.height=4}
+
+ypm_full_map%>% 
+  filter(Floor == 2) %>% 
+  ggplot(aes(x=x, y=y, fill = color)) +
+  geom_raster() +
+  scale_fill_identity() +
+  geom_point(data = exhibs_plot %>% mutate(x = ifelse(Floor != 2, NA, x)),
+             aes(color = Exhib), size = 2, alpha = 0.5) +
+  scale_color_discrete( l = seq(50, 21, length.out = length(unique(exhibs_plot$Exhib)))) +
+  geom_label(data = data.frame(x=370, y=140, color=NA), label = "1", color = "#eee8d5", 
+             fill = "#002b36", size = 5) +
+  geom_label(data = data.frame(x=430, y=300, color=NA), label = "2", color = "#eee8d5", 
+         fill = "#002b36", size = 5) +
+  coord_fixed(expand = FALSE) +
+  theme_void() +
+  theme(
+    strip.text = element_blank(),
+    legend.position = "bottom"
+  )
+
+```
+
+## Third Floor insights
+
+1. The minerals in the David Friend Hall make great photos
+2. Guests like the dioramas, the bears, & the dodo
+3. Events (MLK, Fiesta, Bones & Beer, birthdays) drive posts
+4. Space and Connecticut geology galleries lack engagement
+
+```{r map_3c, echo=FALSE, message=FALSE, warning=FALSE, fig.width=6, fig.height=4}
+
+ypm_full_map%>% 
+  filter(Floor == 3) %>% 
+  ggplot(aes(x=x, y=y, fill = color)) +
+  geom_raster() +
+  scale_fill_identity() +
+  geom_text(data = data.frame(x=400, y=300, color=NA, Floor = 3), label = "Events\n(Great Hall)", color = "black", 
+              size = 4, fontface = "bold") +
+  geom_point(data = exhibs_plot %>% mutate(x = ifelse(Floor != 3, NA, x)),
+             aes(color = Exhib), size = 2, alpha = 0.5) +
+  scale_color_discrete( l = seq(50, 21, length.out = length(unique(exhibs_plot$Exhib)))) +
+  geom_label(data = data.frame(x=115, y=475, color=NA), label = "1", color = "#eee8d5", 
+           fill = "#002b36", size = 5) +
+  geom_label(data = data.frame(x=275, y=110, color=NA), label = "2", color = "#eee8d5", 
+           fill = "#002b36", size = 5) +
+  geom_label(data = data.frame(x=600, y=160, color=NA), label = "2", color = "#eee8d5", 
+           fill = "#002b36", size = 5) +
+  geom_label(data = data.frame(x=400, y=300, color=NA), label = "3", color = "#eee8d5", 
+           fill = "#002b36", size = 5) +
+  geom_label(data = data.frame(x=135, y=275, color=NA), label = "4", color = "#eee8d5", 
+           fill = "#002b36", size = 5) +
+  coord_fixed(expand = FALSE) +
+  theme_void() +
+  theme(
+    strip.text = element_blank(),
+    legend.position = "bottom"
+  )
+
+```
+
+## Popular Exhibits
+
+Share of photos taken in each exhibit hall.
+
+```{r exhibs, echo=FALSE, message=FALSE, warning=FALSE}
+exhibs3 <- readRDS("PeabodyInsta/Post2/oct_exhibs.RDS")
+
+exhibs_by_room <- exhibs3 %>% 
+  mutate(Exhib = case_when(
+                  str_detect(Exhib, "Temporary|Study") ~ "Temporary Gallery", 
+                  TRUE ~ Exhib)
+         ) %>%
+  count(Exhib) %>% 
+  mutate(share = round(n/sum(n), 2)) %>% 
+  mutate(share = ifelse(share >= 0.02, scales::percent(share, accuracy = 1), "< 2%")) %>% 
+  arrange(desc(n)) %>% 
+  select(-n) 
+
+exhibs_by_room[1:8,] %>% 
+  rename(`Exhibit` = Exhib, `% Posts` = share) %>% 
+  mutate(` ` = "") %>% 
+  bind_cols(
+    exhibs_by_room[9:16,] %>% 
+    rename(`Exhibit ` = Exhib, `% Posts ` = share)
+  ) %>% 
+  knitr::kable(escape = FALSE) %>%
+  kable_styling(font_size = 16)
+
+```
+
+# Why is this important?
+
+* Every Instagram post by a guest is a mini advertisement for the museum. 
+
+* Social media posts about great experiences at the Peabody will inspire more people to visit.
+
+* A dynamic museum experience will encourage guests to return.
+
+* The museum has limited space. If guests aren't engaging with a hall, perhaps we can do better.
+
+* Comments on social media posts can provide insights on guest sentiment.
+
+***
+
+*Learn more about the [Peabody Museum](http://peabody.yale.edu/). Also check out my [series of posts](../../../../tags/age-of-reptiles) on the data behind the Age of Reptiles mural.*
