@@ -9,7 +9,7 @@ categories:
 tags:
   - Golden Girls
   - R
-summary: 'COnvert and image into a single-line spiral drawing using R and the tidyverse.'
+summary: 'Convert an image into a single-line spiral drawing using R and the tidyverse.'
 header: 
   image: "posts/SpiralDrawings1.jpg"
 ---
