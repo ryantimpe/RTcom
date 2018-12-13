@@ -1,0 +1,374 @@
+---
+title: 'Is that a dinosaur or a Pokémon? Using deep learning to distinguish fact from fiction'
+author: Ryan Timpe
+date: '2018-12-13'
+slug: Kerasaurs2
+categories:
+  - Dinosaurs
+  - Machine Learning
+tags:
+  - Datasaurs
+  - R
+  - Pokémon
+  - Keras
+summary: "Using Keras binary classification to identify Pokémon and extinct animal names"
+header: 
+  image: "posts/Kerasaurs2.jpg"
+
+---
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+library(tidyverse)
+library(png)
+library(kableExtra)
+
+options(knitr.table.format = "html") 
+options(kableExtra.auto_format = FALSE)
+options(knitr.kable.NA = '')
+
+#Input data
+start_animals <- readRDS("Kerasaurs/list_of_extinct_reptiles.RDS")
+start_pokemon <- readRDS("Kerasaurs/list_of_pokemon.RDS")
+
+keras_animals <- read.csv("Kerasaurs/2_Names_Output_ptero_highertemp.csv", stringsAsFactors = FALSE)[,1]
+keras_pokemon <- read.csv("Kerasaurs/4a_Pokemon_Output.csv", stringsAsFactors = FALSE)[,1]
+
+#Output
+out_results <- readRDS("Kerasaurs/4b_Output_TestResults.RDS")
+out_keras   <- readRDS("Kerasaurs/4b_Output_Kerasaurs.RDS")
+```
+
+### Taxonomy in the animal and Pokémon kingdoms
+
+Binary classification is relatively simple use of machine learning to differentiate truth from lies, good from bad, yes from no, and... Pokémon from dinosaurs.
+
+Pokémon names can be absurd (exeggutor, kangaskhan, mewtwo) and usually it's pretty easy for a human to identify them. However, once in a while, the Pokémon Company throws a curve ball and names their creatures like actual animals: using fake Latin prefixes & suffixes (e.g. bulbasaur, aerodactyl, bastiodon[^bastiodon]).
+
+[^bastiodon]: Bastiodon is a Pokémon, but if it were a Latin name, it would mean something like 'construction tooth'. Fitting since it looks like a toothy bulldozer-triceratops.
+
+    ![411Bastiodon](/img/411Bastiodon.png){width=175px}
+
+Paleontologists, on the other hand, have a tendency to be super creative when it comes to naming extinct animals, often at the expense of the general public's understanding and pronunciation ability. Usually they use Latin roots, but also occasionally use names of people, places, or other languages. These names may not necessarily look any more scientific than a Pokémon name (such as Quetzalcoatlus, Shuvuuia, and Fukuititan). Inspired by some of these sillier names, a few months ago, I built a deep learning model using [TensorFlow and Keras](https://keras.rstudio.com/index.html) to generate new [dinosaur and extinct animal names](../../../../2018/02/09/kerasaurs1/).
+
+### The Goal
+
+Perhaps there's more structure in Pokémon and extinct animal names than meets the eye. Would a computer be better at finding some logic behind the different names? **Can I train a deep learning model to determine if a word is the name of a Pokémon or of an extinct animal?**
+
+### The Data
+
+I begin with a list of `r length(start_animals)` genus names of extinct dinosaurs, pterosaurs, mosasaurs, ichthyosaurs, and plesiosaurs from their respective Wikipedia pages, collectively classified as 'Animals'. I append a list of `r length(start_pokemon)` Pokémon names from [pokemondb.net](https://pokemondb.net/pokedex/national).[^samplesize]
+
+[^samplesize]: I'm curious is the uneven sample sizes for animals & Pokémon affect the strength of the model, especially since it seems the model results are skewed toward classifying words as animals. A quick Google search suggests that it's not a problem, but I will investigate this more at a later time.
+
+I also use some silhouette images of dinosaurs and other animals from [PhyloPic](http://phylopic.org/image/browse/) for the *awesome* graphics.[^phylo]
+
+[^phylo]: PhyloPic is raising money for a major overhaul. [Donate here!](https://www.indiegogo.com/projects/phylopic-2-0-free-silhouettes-of-all-life-forms/x/19816387#/)
+
+### The Model
+
+#### Developers
+
+This project is an adaption of RStudio's Keras [text classification tutorial](https://keras.rstudio.com/articles/tutorial_basic_text_classification.html) to identify positive and negative movie reviews on IMDB. I also re-purposed some functions from my previous project to generate dinosaur names. These functions were originally from [Jonathan Nolis](https://twitter.com/skyetetra) for their project to generate [offensive license plates](https://towardsdatascience.com/using-deep-learning-to-generate-offensive-license-plates-619b163ed937) using data from banned plates in Arizona. 
+
+#### Data cleaning
+
+I start by setting aside 20% of the animal and Pokémon names as a test set[^testset] (observations I don't touch until the very end), leaving me with `r length(start_pokemon) + length(start_animals) - nrow(out_results)` names to train the model. Before these names can be used with deep learning algorithms, they must be converted to a format the models can understand.
+
+[^testset]: Look at me being a proper data scientist.`r emo::ji("smug")`
+
+The models expect a square matrix as input, so I first pad the beginning of each name with \*s until each name is 20 characters in length. I then split each padded name into an array of 20 characters, but replace those characters with a unique numeric value. For example, each '\*' becomes a '0', 'a' becomes '1', and so on... This ends up converting our x values into a square matrix of `r length(start_pokemon) + length(start_animals) - nrow(out_results)` rows and 20 columns.
+
+```{r include = FALSE}
+#Functions to process data -
+pad_data <- function(dat, max_length){
+  dat %>% 
+    map_chr(function(x, max_length){
+      y <- str_c(paste0(rep("*", max(0, max_length - nchar(x))), collapse=""), x)
+      return(y)
+    }, max_length)
+}
+vectorize <- function(dat, characters, max_length){
+  x <- array(0, dim = c(length(dat), max_length))
+  
+  for(i in 1:length(dat)){
+    for(j in 1:(max_length)){
+      x[i,j] <- which(characters==substr(dat[[i]], j, j)) - 1
+    }
+  }
+  x
+}
+```
+```{r}
+#Processing inputs
+max_length <- 20
+characters <- c("*", letters)
+
+"bulbasaur" %>% 
+  pad_data(max_length) %T>%
+  print() %>% 
+  vectorize(characters, max_length)
+```
+
+This is the only input data - **names are classified based off their characters alone**.
+
+The y data (animal or Pokémon) is binary - 0 for animal and 1 for Pokémon.
+
+<details>
+<summary>Click here to see script</summary>
+```{r eval=FALSE}
+library(tidyverse)
+library(tokenizers)
+library(keras)
+
+set.seed(12334)
+
+#Consolidate data  ----
+
+animals <- readRDS("data/list_of_extinct_reptiles.RDS") %>%
+  str_replace_all("[^[:alnum:] ]", "") %>% # remove any special characters
+  tolower
+
+pokemon <- readRDS("data/list_of_pokemon.RDS") %>%
+  iconv(from="UTF-8",to="ASCII//TRANSLIT") %>% 
+  str_replace_all("[^[A-Za-z] ]", "") %>% # remove any special characters
+  tolower %>% 
+  unique()
+
+full_data <- tibble(Category = "Animal", Name = animals) %>% 
+  bind_rows(tibble(Category = "Pokemon", Name = pokemon)) %>% 
+  arrange(Name) %>% 
+  distinct()
+
+train_data <- full_data %>% 
+  sample_frac(0.8)
+
+test_data <- full_data %>% 
+  anti_join(train_data)
+
+max_length <- 20
+
+#Functions to process data -
+pad_data <- function(dat, max_length){
+  dat %>% 
+    map_chr(function(x, max_length){
+      y <- str_c(paste0(rep("*", max(0, max_length - nchar(x))), collapse=""), x)
+      return(y)
+    }, max_length)
+}
+vectorize <- function(dat, characters, max_length){
+  x <- array(0, dim = c(length(dat), max_length))
+  
+  for(i in 1:length(dat)){
+    for(j in 1:(max_length)){
+      x[i,j] <- which(characters==substr(dat[[i]], j, j)) - 1
+    }
+  }
+  x
+}
+
+x_train <- train_data$Name %>% 
+  pad_data(max_length)
+
+characters <- x_train %>% 
+  tokenize_characters(strip_non_alphanum = FALSE) %>% 
+  flatten() %>% 
+  unlist() %>% 
+  unique() %>% 
+  sort()
+
+x_train_v <- x_train %>% vectorize(characters, max_length)
+
+y_train <- as.numeric(train_data$Category == "Pokemon")
+```
+</details>
+
+### Results
+
+For each processed name (a row in the matrix), the model results are a value between 0 and 1, with values closer to 0 more likely to be the name of an extinct animal and values closer to one more likely to be a Pokemon name. 
+
+<details>
+<summary>Click here to see script</summary>
+```{r eval=FALSE}
+vocab_size <- length(characters)
+
+#This model specification is borrowed heavily from the RStudio example
+# https://keras.rstudio.com/articles/tutorial_basic_text_classification.html
+
+model <- keras_model_sequential()
+model %>% 
+  layer_embedding(input_dim = vocab_size, output_dim = 16) %>%
+  layer_global_average_pooling_1d() %>%
+  layer_dense(units = 16, activation = "relu") %>%
+  layer_dense(units = 1, activation = "sigmoid")
+
+# The first layer is an embedding layer. This layer takes the integer-encoded vocabulary and looks up the embedding vector for each word-index. These vectors are learned as the model trains. The vectors add a dimension to the output array. The resulting dimensions are: (batch, sequence, embedding).
+# Next, a global_average_pooling_1d layer returns a fixed-length output vector for each example by averaging over the sequence dimension. This allows the model to handle input of variable length, in the simplest way possible.
+# This fixed-length output vector is piped through a fully-connected (dense) layer with 16 hidden units.
+# The last layer is densely connected with a single output node. Using the sigmoid activation function, this value is a float between 0 and 1, representing a probability, or confidence level.
+
+model %>% compile(
+  optimizer = 'adam',
+  loss = 'binary_crossentropy',
+  metrics = list('accuracy')
+)
+
+#Validation, training
+#Prior to modeling, I further split the training data set into a 250 names reserved for validation and the rest for fitting the model.
+validation_size <- sample(1:nrow(x_train_v), 250)
+partial_x_train <- x_train_v[-validation_size, ]
+partial_y_train <- y_train[-validation_size]
+
+x_val <- x_train_v[validation_size, ]
+y_val <- y_train[validation_size]
+
+model %>% fit(
+  partial_x_train,
+  partial_y_train,
+  epochs = 80,
+  batch_size = 512,
+  validation_data = list(x_val, y_val),
+  verbose=1
+)
+
+```
+</details>
+
+#### Validation
+
+How does the model perform on the `r nrow(out_results)` names in the test data set? Rounding the results to 0 or 1, the model is great at correctly assigning extinct animal names to the animal category, but slightly less successful at correctly identifying Pokemon names.[^Incorrect]
+
+```{r, echo = FALSE}
+model_res <- out_results %>% 
+  mutate(pred = round(pred_raw*100),
+         pred_cat = ifelse(round(pred_raw, 0 ) == 1, "Pokémon", "Animal"),
+         conf = abs(pred_raw - 0.5) + 0.5,
+         conf2 = case_when(
+           conf > 0.8 ~ "3 - High",
+           conf > 0.6 ~ "2 - Med",
+           TRUE ~ "1 - Low"
+         )) %>% 
+  mutate(Category = ifelse(Category == "Pokemon", "Pokémon", Category)) %>% 
+  mutate(validation = Category == pred_cat)
+
+model_res %>% 
+  count(Actual = Category, Predicted = pred_cat) %>% 
+  group_by(Actual) %>% 
+  mutate(perc= scales::percent(n / sum(n))) %>% 
+  mutate(value = paste0(n, "\n(", perc,")"),
+         value = ifelse(Actual == Predicted, 
+                            text_spec(value, color = "green"), 
+                            text_spec(value, color = "#d33682", bold = TRUE))) %>% 
+  select(-n, -perc) %>% 
+  spread(Predicted, value) %>% 
+  rename(`Actual / Predicted` = Actual) %>% 
+  knitr::kable(escape=FALSE,
+               caption = "Animal / Pokémon classification accuracy: Test data")
+
+```
+
+[^Incorrect]: Which of names did the model get incorrect? I'm not sure a human would have done much better. Look at some of those animal names! @paleontologists WTF?!
+    
+    ```{r, echo = FALSE}
+    model_res %>% 
+      arrange(Name) %>% 
+      filter(!validation, Category == "Animal") %>% 
+      select(Animal = Name) %>% 
+      mutate(` ` = " ") %>% 
+      bind_cols(
+        model_res %>% 
+          filter(!validation, Category == "Pokémon") %>% 
+          select(`Pokémon` = Name) %>% 
+          bind_rows(tibble(`Pokémon` = c(NA, NA)))
+      ) %>% 
+      knitr::kable(escape=FALSE) %>%
+      kable_styling(font_size = 14, full_width = F)
+      
+    ```
+
+#### Meta-validation
+
+As mentioned above, I had previously used Keras to develop a model to generate new names for dinosaurs and other extinct animals. How well does this new model classify those names that are *designed* to look like animal names?[^fakenews] For completion, I reran that [model on the Pokemon names](https://github.com/ryantimpe/Kerasaurs/blob/master/4a_Pokemon_Run%20Model.R) to also generate brand [new Pokemon-style names](https://github.com/ryantimpe/Kerasaurs/blob/master/Output/4a_Pokemon_Output.csv)[^fakepokemon].
+
+[^fakenews]: I don't think *this* is proper data science. `r emo::ji("shrug")`
+
+[^fakepokemon]: Some of these generated Pokémon names are awesome. Email me, Nintendo.
+
+```{r, echo = FALSE}
+model_keras<- out_keras %>% 
+  mutate(pred = round(pred_raw*100),
+         pred_cat = ifelse(round(pred_raw, 0 ) == 1, "Pokémon", "Animal"),
+         conf = abs(pred_raw - 0.5) + 0.5,
+         conf2 = case_when(
+           conf > 0.8 ~ "3 - High",
+           conf > 0.6 ~ "2 - Med",
+           TRUE ~ "1 - Low"
+         )) %>% 
+  mutate(Category = ifelse(Category == "Pokemon", "Pokémon", Category)) %>% 
+  mutate(validation = Category == pred_cat)
+
+model_keras %>% 
+  count(Actual = Category, Predicted = pred_cat) %>% 
+  group_by(Actual) %>% 
+  mutate(perc= scales::percent(n / sum(n))) %>% 
+  mutate(value = paste0(n, "\n(", perc,")"),
+         value = ifelse(Actual == Predicted, 
+                            text_spec(value, color = "green"), 
+                            text_spec(value, color = "#d33682", bold = TRUE))) %>% 
+  select(-n, -perc) %>% 
+  spread(Predicted, value) %>% 
+  rename(`Generated / Predicted` = Actual) %>% 
+  knitr::kable(escape=FALSE,
+               caption = "Animal / Pokémon classification accuracy: Generated data")
+
+```
+
+The error is more or less the same as the test data, which is great! ...I think `r emo::ji("thinking")`
+
+#### Pattern validation
+
+Finally, I want to see how sensitive the model is to common prefixes and suffixes in animal and Pokémon names. I take six animal and Pokémon names, split them into a prefix and suffix, and combine those to get 36 real and fake names. I run those names through to the model to see if there is a pattern in the predictions.
+
+```{r echo=FALSE}
+out_presuf <- readRDS("Kerasaurs/PrefixSuffix_Results.RDS")
+out_presuf$pred_raw <- as.numeric(out_presuf$pred_raw )
+
+model_presuf <- out_presuf %>% 
+  mutate(pred = scales::percent(pred_raw),
+         prob = scales::percent(abs(pred_raw-0.5)+0.5),
+         value = paste0(case_when(
+                          pred_raw < 0.5 & Actual =="Animal" ~ "<span style='color:green;'><b>Animal</b></span>",
+                          pred_raw < 0.5 & Actual =="Pokemon" ~ "<span style='color:#d33682;'><b>Animal</b></span>",
+                          pred_raw >= 0.5 & Actual =="Animal" ~ "<span style='color:#d33682;'><b>Pokémon</b></span>",
+                          pred_raw >= 0.5 & Actual =="Pokemon" ~ "<span style='color:green;'><b>Pokémon</b></span>",
+                          pred_raw < 0.5 ~ "Animal",
+                          TRUE ~ "Pokémon"
+                          ), 
+                        "<br/>", prob))
+
+model_presuf %>% 
+  select(pre, suf, value) %>% 
+  mutate(pre = factor(paste0(pre, "-"), levels = unique(paste0(pre, "-")) ),
+         suf = factor(paste0("-", suf), levels = unique(paste0("-", suf)) )) %>% 
+  spread(suf, value) %>%
+  rename(`Prefix - Suffix` = pre) %>% 
+  knitr::kable(escape=FALSE, 
+                caption = "Model probabilities of prefix & suffix combinations") %>%
+  kable_styling(font_size = 16, full_width = F) %>% 
+  column_spec(1, bold = T, border_right = T) %>% 
+  footnote(general = c("Actual animal & Pokémon name down the diagonal",
+    "Green: Name correctly identified", "Red: Name incorrectly identified"))
+
+```
+
+The prefix 'Tyrani' skews the model results heavily toward the animal classification (there are 11 animals with 'tyran' in the data). However, the model results seem to be fully determined by the suffix, except for when 'Tyrani' is the prefix.
+
+### Conclusion
+
+The error rates on the model aren't great, but considering that the names of both extinct animal and Pokémon are generated by humans *and* some Pokémon names are inspired by actual animal names, the model performed better than I had expected. More importantly, it was a great opportunity to make this ggplot:
+
+![](/img/PokemonChart.png){width=550px}
+
+***
+
+*Try it out! Full script can be found on [GitHub](https://github.com/ryantimpe/Kerasaurs)!*

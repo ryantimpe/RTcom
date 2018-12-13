@@ -9,6 +9,7 @@ categories:
 tags:
   - Datasaurs
   - R
+  - Keras
 summary: "Using Keras to generate new dinosaur names and display them on phylogenetic trees."
 header: 
   image: "posts/Kerasaurs1.jpg"

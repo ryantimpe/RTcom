@@ -1,0 +1,753 @@
+---
+title: 'Is that a dinosaur or a Pokémon? Using deep learning to distinguish fact from fiction'
+author: Ryan Timpe
+date: '2018-12-13'
+slug: Kerasaurs2
+categories:
+  - Dinosaurs
+  - Machine Learning
+tags:
+  - Datasaurs
+  - R
+  - Pokémon
+  - Keras
+summary: "Using Keras binary classification to identify Pokémon and extinct animal names"
+header: 
+  image: "posts/Kerasaurs2.jpg"
+
+---
+
+<script src="/rmarkdown-libs/kePrint/kePrint.js"></script>
+
+
+<div id="taxonomy-in-the-animal-and-pokemon-kingdoms" class="section level3">
+<h3>Taxonomy in the animal and Pokémon kingdoms</h3>
+<p>Binary classification is relatively simple use of machine learning to differentiate truth from lies, good from bad, yes from no, and… Pokémon from dinosaurs.</p>
+<p>Pokémon names can be absurd (exeggutor, kangaskhan, mewtwo) and usually it’s pretty easy for a human to identify them. However, once in a while, the Pokémon Company throws a curve ball and names their creatures like actual animals: using fake Latin prefixes &amp; suffixes (e.g. bulbasaur, aerodactyl, bastiodon<a href="#fn1" class="footnoteRef" id="fnref1"><sup>1</sup></a>).</p>
+<p>Paleontologists, on the other hand, have a tendency to be super creative when it comes to naming extinct animals, often at the expense of the general public’s understanding and pronunciation ability. Usually they use Latin roots, but also occasionally use names of people, places, or other languages. These names may not necessarily look any more scientific than a Pokémon name (such as Quetzalcoatlus, Shuvuuia, and Fukuititan). Inspired by some of these sillier names, a few months ago, I built a deep learning model using <a href="https://keras.rstudio.com/index.html">TensorFlow and Keras</a> to generate new <a href="../../../../2018/02/09/kerasaurs1/">dinosaur and extinct animal names</a>.</p>
+</div>
+<div id="the-goal" class="section level3">
+<h3>The Goal</h3>
+<p>Perhaps there’s more structure in Pokémon and extinct animal names than meets the eye. Would a computer be better at finding some logic behind the different names? <strong>Can I train a deep learning model to determine if a word is the name of a Pokémon or of an extinct animal?</strong></p>
+</div>
+<div id="the-data" class="section level3">
+<h3>The Data</h3>
+<p>I begin with a list of 1865 genus names of extinct dinosaurs, pterosaurs, mosasaurs, ichthyosaurs, and plesiosaurs from their respective Wikipedia pages, collectively classified as ‘Animals’. I append a list of 809 Pokémon names from <a href="https://pokemondb.net/pokedex/national">pokemondb.net</a>.<a href="#fn2" class="footnoteRef" id="fnref2"><sup>2</sup></a></p>
+<p>I also use some silhouette images of dinosaurs and other animals from <a href="http://phylopic.org/image/browse/">PhyloPic</a> for the <em>awesome</em> graphics.<a href="#fn3" class="footnoteRef" id="fnref3"><sup>3</sup></a></p>
+</div>
+<div id="the-model" class="section level3">
+<h3>The Model</h3>
+<div id="developers" class="section level4">
+<h4>Developers</h4>
+<p>This project is an adaption of RStudio’s Keras <a href="https://keras.rstudio.com/articles/tutorial_basic_text_classification.html">text classification tutorial</a> to identify positive and negative movie reviews on IMDB. I also re-purposed some functions from my previous project to generate dinosaur names. These functions were originally from <a href="https://twitter.com/skyetetra">Jonathan Nolis</a> for their project to generate <a href="https://towardsdatascience.com/using-deep-learning-to-generate-offensive-license-plates-619b163ed937">offensive license plates</a> using data from banned plates in Arizona.</p>
+</div>
+<div id="data-cleaning" class="section level4">
+<h4>Data cleaning</h4>
+<p>I start by setting aside 20% of the animal and Pokémon names as a test set<a href="#fn4" class="footnoteRef" id="fnref4"><sup>4</sup></a> (observations I don’t touch until the very end), leaving me with 2141 names to train the model. Before these names can be used with deep learning algorithms, they must be converted to a format the models can understand.</p>
+<p>The models expect a square matrix as input, so I first pad the beginning of each name with *s until each name is 20 characters in length. I then split each padded name into an array of 20 characters, but replace those characters with a unique numeric value. For example, each ‘*’ becomes a ‘0’, ‘a’ becomes ‘1’, and so on… This ends up converting our x values into a square matrix of 2141 rows and 20 columns.</p>
+<pre class="r"><code>#Processing inputs
+max_length &lt;- 20
+characters &lt;- c(&quot;*&quot;, letters)
+
+&quot;bulbasaur&quot; %&gt;% 
+  pad_data(max_length) %T&gt;%
+  print() %&gt;% 
+  vectorize(characters, max_length)</code></pre>
+<pre><code>## [1] &quot;***********bulbasaur&quot;</code></pre>
+<pre><code>##      [,1] [,2] [,3] [,4] [,5] [,6] [,7] [,8] [,9] [,10] [,11] [,12] [,13]
+## [1,]    0    0    0    0    0    0    0    0    0     0     0     2    21
+##      [,14] [,15] [,16] [,17] [,18] [,19] [,20]
+## [1,]    12     2     1    19     1    21    18</code></pre>
+<p>This is the only input data - <strong>names are classified based off their characters alone</strong>.</p>
+<p>The y data (animal or Pokémon) is binary - 0 for animal and 1 for Pokémon.</p>
+<p><details> <summary>Click here to see script</summary></p>
+<pre class="r"><code>library(tidyverse)
+library(tokenizers)
+library(keras)
+
+set.seed(12334)
+
+#Consolidate data  ----
+
+animals &lt;- readRDS(&quot;data/list_of_extinct_reptiles.RDS&quot;) %&gt;%
+  str_replace_all(&quot;[^[:alnum:] ]&quot;, &quot;&quot;) %&gt;% # remove any special characters
+  tolower
+
+pokemon &lt;- readRDS(&quot;data/list_of_pokemon.RDS&quot;) %&gt;%
+  iconv(from=&quot;UTF-8&quot;,to=&quot;ASCII//TRANSLIT&quot;) %&gt;% 
+  str_replace_all(&quot;[^[A-Za-z] ]&quot;, &quot;&quot;) %&gt;% # remove any special characters
+  tolower %&gt;% 
+  unique()
+
+full_data &lt;- tibble(Category = &quot;Animal&quot;, Name = animals) %&gt;% 
+  bind_rows(tibble(Category = &quot;Pokemon&quot;, Name = pokemon)) %&gt;% 
+  arrange(Name) %&gt;% 
+  distinct()
+
+train_data &lt;- full_data %&gt;% 
+  sample_frac(0.8)
+
+test_data &lt;- full_data %&gt;% 
+  anti_join(train_data)
+
+max_length &lt;- 20
+
+#Functions to process data -
+pad_data &lt;- function(dat, max_length){
+  dat %&gt;% 
+    map_chr(function(x, max_length){
+      y &lt;- str_c(paste0(rep(&quot;*&quot;, max(0, max_length - nchar(x))), collapse=&quot;&quot;), x)
+      return(y)
+    }, max_length)
+}
+vectorize &lt;- function(dat, characters, max_length){
+  x &lt;- array(0, dim = c(length(dat), max_length))
+  
+  for(i in 1:length(dat)){
+    for(j in 1:(max_length)){
+      x[i,j] &lt;- which(characters==substr(dat[[i]], j, j)) - 1
+    }
+  }
+  x
+}
+
+x_train &lt;- train_data$Name %&gt;% 
+  pad_data(max_length)
+
+characters &lt;- x_train %&gt;% 
+  tokenize_characters(strip_non_alphanum = FALSE) %&gt;% 
+  flatten() %&gt;% 
+  unlist() %&gt;% 
+  unique() %&gt;% 
+  sort()
+
+x_train_v &lt;- x_train %&gt;% vectorize(characters, max_length)
+
+y_train &lt;- as.numeric(train_data$Category == &quot;Pokemon&quot;)</code></pre>
+<p></details></p>
+</div>
+</div>
+<div id="results" class="section level3">
+<h3>Results</h3>
+<p>For each processed name (a row in the matrix), the model results are a value between 0 and 1, with values closer to 0 more likely to be the name of an extinct animal and values closer to one more likely to be a Pokemon name.</p>
+<p><details> <summary>Click here to see script</summary></p>
+<pre class="r"><code>vocab_size &lt;- length(characters)
+
+#This model specification is borrowed heavily from the RStudio example
+# https://keras.rstudio.com/articles/tutorial_basic_text_classification.html
+
+model &lt;- keras_model_sequential()
+model %&gt;% 
+  layer_embedding(input_dim = vocab_size, output_dim = 16) %&gt;%
+  layer_global_average_pooling_1d() %&gt;%
+  layer_dense(units = 16, activation = &quot;relu&quot;) %&gt;%
+  layer_dense(units = 1, activation = &quot;sigmoid&quot;)
+
+# The first layer is an embedding layer. This layer takes the integer-encoded vocabulary and looks up the embedding vector for each word-index. These vectors are learned as the model trains. The vectors add a dimension to the output array. The resulting dimensions are: (batch, sequence, embedding).
+# Next, a global_average_pooling_1d layer returns a fixed-length output vector for each example by averaging over the sequence dimension. This allows the model to handle input of variable length, in the simplest way possible.
+# This fixed-length output vector is piped through a fully-connected (dense) layer with 16 hidden units.
+# The last layer is densely connected with a single output node. Using the sigmoid activation function, this value is a float between 0 and 1, representing a probability, or confidence level.
+
+model %&gt;% compile(
+  optimizer = &#39;adam&#39;,
+  loss = &#39;binary_crossentropy&#39;,
+  metrics = list(&#39;accuracy&#39;)
+)
+
+#Validation, training
+#Prior to modeling, I further split the training data set into a 250 names reserved for validation and the rest for fitting the model.
+validation_size &lt;- sample(1:nrow(x_train_v), 250)
+partial_x_train &lt;- x_train_v[-validation_size, ]
+partial_y_train &lt;- y_train[-validation_size]
+
+x_val &lt;- x_train_v[validation_size, ]
+y_val &lt;- y_train[validation_size]
+
+model %&gt;% fit(
+  partial_x_train,
+  partial_y_train,
+  epochs = 80,
+  batch_size = 512,
+  validation_data = list(x_val, y_val),
+  verbose=1
+)</code></pre>
+<p></details></p>
+<div id="validation" class="section level4">
+<h4>Validation</h4>
+<p>How does the model perform on the 533 names in the test data set? Rounding the results to 0 or 1, the model is great at correctly assigning extinct animal names to the animal category, but slightly less successful at correctly identifying Pokemon names.<a href="#fn5" class="footnoteRef" id="fnref5"><sup>5</sup></a></p>
+<table>
+<caption>
+<span id="tab:unnamed-chunk-5">Table 1: </span>Animal / Pokémon classification accuracy: Test data
+</caption>
+<thead>
+<tr>
+<th style="text-align:left;">
+Actual / Predicted
+</th>
+<th style="text-align:left;">
+Animal
+</th>
+<th style="text-align:left;">
+Pokémon
+</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align:left;">
+Animal
+</td>
+<td style="text-align:left;">
+<span style="     color: green;">349<br />(93.3%)</span>
+</td>
+<td style="text-align:left;">
+<span style=" font-weight: bold;    color: #d33682;">25<br />(6.7%)</span>
+</td>
+</tr>
+<tr>
+<td style="text-align:left;">
+Pokémon
+</td>
+<td style="text-align:left;">
+<span style=" font-weight: bold;    color: #d33682;">23<br />(14.5%)</span>
+</td>
+<td style="text-align:left;">
+<span style="     color: green;">136<br />(85.5%)</span>
+</td>
+</tr>
+</tbody>
+</table>
+</div>
+<div id="meta-validation" class="section level4">
+<h4>Meta-validation</h4>
+<p>As mentioned above, I had previously used Keras to develop a model to generate new names for dinosaurs and other extinct animals. How well does this new model classify those names that are <em>designed</em> to look like animal names?<a href="#fn6" class="footnoteRef" id="fnref6"><sup>6</sup></a> For completion, I reran that <a href="https://github.com/ryantimpe/Kerasaurs/blob/master/4a_Pokemon_Run%20Model.R">model on the Pokemon names</a> to also generate brand <a href="https://github.com/ryantimpe/Kerasaurs/blob/master/Output/4a_Pokemon_Output.csv">new Pokemon-style names</a><a href="#fn7" class="footnoteRef" id="fnref7"><sup>7</sup></a>.</p>
+<table>
+<caption>
+<span id="tab:unnamed-chunk-7">Table 2: </span>Animal / Pokémon classification accuracy: Generated data
+</caption>
+<thead>
+<tr>
+<th style="text-align:left;">
+Generated / Predicted
+</th>
+<th style="text-align:left;">
+Animal
+</th>
+<th style="text-align:left;">
+Pokémon
+</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align:left;">
+Animal
+</td>
+<td style="text-align:left;">
+<span style="     color: green;">260<br />(91.9%)</span>
+</td>
+<td style="text-align:left;">
+<span style=" font-weight: bold;    color: #d33682;">23<br />(8.1%)</span>
+</td>
+</tr>
+<tr>
+<td style="text-align:left;">
+Pokémon
+</td>
+<td style="text-align:left;">
+<span style=" font-weight: bold;    color: #d33682;">30<br />(15.6%)</span>
+</td>
+<td style="text-align:left;">
+<span style="     color: green;">162<br />(84.4%)</span>
+</td>
+</tr>
+</tbody>
+</table>
+<p>The error is more or less the same as the test data, which is great! …I think 🤔</p>
+</div>
+<div id="pattern-validation" class="section level4">
+<h4>Pattern validation</h4>
+<p>Finally, I want to see how sensitive the model is to common prefixes and suffixes in animal and Pokémon names. I take six animal and Pokémon names, split them into a prefix and suffix, and combine those to get 36 real and fake names. I run those names through to the model to see if there is a pattern in the predictions.</p>
+<table class="table" style="font-size: 16px; width: auto !important; margin-left: auto; margin-right: auto;">
+<caption style="font-size: initial !important;">
+<span id="tab:unnamed-chunk-8">Table 3: </span>Model probabilities of prefix &amp; suffix combinations
+</caption>
+<thead>
+<tr>
+<th style="text-align:left;">
+Prefix - Suffix
+</th>
+<th style="text-align:left;">
+-saurus
+</th>
+<th style="text-align:left;">
+-tar
+</th>
+<th style="text-align:left;">
+-dactylus
+</th>
+<th style="text-align:left;">
+-buzz
+</th>
+<th style="text-align:left;">
+-docus
+</th>
+<th style="text-align:left;">
+-chu
+</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align:left;font-weight: bold;border-right:1px solid;">
+Allo-
+</td>
+<td style="text-align:left;">
+<span style="color:green;"><b>Animal</b></span><br>87.5%
+</td>
+<td style="text-align:left;">
+Pokémon<br>83.4%
+</td>
+<td style="text-align:left;">
+Animal<br>95.0%
+</td>
+<td style="text-align:left;">
+Pokémon<br>88.5%
+</td>
+<td style="text-align:left;">
+Animal<br>60.3%
+</td>
+<td style="text-align:left;">
+Pokémon<br>85.1%
+</td>
+</tr>
+<tr>
+<td style="text-align:left;font-weight: bold;border-right:1px solid;">
+Tyrani-
+</td>
+<td style="text-align:left;">
+Animal<br>98.1%
+</td>
+<td style="text-align:left;">
+<span style="color:#d33682;"><b>Animal</b></span><br>68.6%
+</td>
+<td style="text-align:left;">
+Animal<br>99.0%
+</td>
+<td style="text-align:left;">
+Animal<br>57.9%
+</td>
+<td style="text-align:left;">
+Animal<br>94.3%
+</td>
+<td style="text-align:left;">
+Animal<br>65.9%
+</td>
+</tr>
+<tr>
+<td style="text-align:left;font-weight: bold;border-right:1px solid;">
+Ptero-
+</td>
+<td style="text-align:left;">
+Animal<br>95.4%
+</td>
+<td style="text-align:left;">
+Pokémon<br>62.6%
+</td>
+<td style="text-align:left;">
+<span style="color:green;"><b>Animal</b></span><br>97.8%
+</td>
+<td style="text-align:left;">
+Pokémon<br>72.7%
+</td>
+<td style="text-align:left;">
+Animal<br>82.0%
+</td>
+<td style="text-align:left;">
+Pokémon<br>65.5%
+</td>
+</tr>
+<tr>
+<td style="text-align:left;font-weight: bold;border-right:1px solid;">
+Electa-
+</td>
+<td style="text-align:left;">
+Animal<br>96.3%
+</td>
+<td style="text-align:left;">
+Pokémon<br>56.7%
+</td>
+<td style="text-align:left;">
+Animal<br>98.2%
+</td>
+<td style="text-align:left;">
+<span style="color:green;"><b>Pokémon</b></span><br>67.6%
+</td>
+<td style="text-align:left;">
+Animal<br>85.3%
+</td>
+<td style="text-align:left;">
+Pokémon<br>59.8%
+</td>
+</tr>
+<tr>
+<td style="text-align:left;font-weight: bold;border-right:1px solid;">
+Diplo-
+</td>
+<td style="text-align:left;">
+Animal<br>95.0%
+</td>
+<td style="text-align:left;">
+Pokémon<br>64.7%
+</td>
+<td style="text-align:left;">
+Animal<br>97.8%
+</td>
+<td style="text-align:left;">
+Pokémon<br>74.4%
+</td>
+<td style="text-align:left;">
+<span style="color:green;"><b>Animal</b></span><br>80.7%
+</td>
+<td style="text-align:left;">
+Pokémon<br>67.5%
+</td>
+</tr>
+<tr>
+<td style="text-align:left;font-weight: bold;border-right:1px solid;">
+Pika-
+</td>
+<td style="text-align:left;">
+Animal<br>85.6%
+</td>
+<td style="text-align:left;">
+Pokémon<br>85.5%
+</td>
+<td style="text-align:left;">
+Animal<br>94.1%
+</td>
+<td style="text-align:left;">
+Pokémon<br>89.4%
+</td>
+<td style="text-align:left;">
+Animal<br>56.4%
+</td>
+<td style="text-align:left;">
+<span style="color:green;"><b>Pokémon</b></span><br>86.9%
+</td>
+</tr>
+</tbody>
+<tfoot>
+<tr>
+<td style="padding: 0; border: 0;" colspan="100%">
+<span style="font-style: italic;">Note: </span>
+</td>
+</tr>
+<tr>
+<td style="padding: 0; border: 0;" colspan="100%">
+<sup></sup> Actual animal &amp; Pokémon name down the diagonal
+</td>
+</tr>
+<tr>
+<td style="padding: 0; border: 0;" colspan="100%">
+<sup></sup> Green: Name correctly identified
+</td>
+</tr>
+<tr>
+<td style="padding: 0; border: 0;" colspan="100%">
+<sup></sup> Red: Name incorrectly identified
+</td>
+</tr>
+</tfoot>
+</table>
+<p>The prefix ‘Tyrani’ skews the model results heavily toward the animal classification (there are 11 animals with ‘tyran’ in the data). However, the model results seem to be fully determined by the suffix, except for when ‘Tyrani’ is the prefix.</p>
+</div>
+</div>
+<div id="conclusion" class="section level3">
+<h3>Conclusion</h3>
+<p>The error rates on the model aren’t great, but considering that the names of both extinct animal and Pokémon are generated by humans <em>and</em> some Pokémon names are inspired by actual animal names, the model performed better than I had expected. More importantly, it was a great opportunity to make this ggplot:</p>
+<div class="figure">
+<img src="/img/PokemonChart.png" width="550" />
+
+</div>
+<hr />
+<p><em>Try it out! Full script can be found on <a href="https://github.com/ryantimpe/Kerasaurs">GitHub</a>!</em></p>
+</div>
+<div class="footnotes">
+<hr />
+<ol>
+<li id="fn1"><p>Bastiodon is a Pokémon, but if it were a Latin name, it would mean something like ‘construction tooth’. Fitting since it looks like a toothy bulldozer-triceratops.</p>
+<p><img src="/img/411Bastiodon.png" title="fig:" alt="411Bastiodon" width="175" /><a href="#fnref1">↩</a></p></li>
+<li id="fn2"><p>I’m curious is the uneven sample sizes for animals &amp; Pokémon affect the strength of the model, especially since it seems the model results are skewed toward classifying words as animals. A quick Google search suggests that it’s not a problem, but I will investigate this more at a later time.<a href="#fnref2">↩</a></p></li>
+<li id="fn3"><p>PhyloPic is raising money for a major overhaul. <a href="https://www.indiegogo.com/projects/phylopic-2-0-free-silhouettes-of-all-life-forms/x/19816387#/">Donate here!</a><a href="#fnref3">↩</a></p></li>
+<li id="fn4"><p>Look at me being a proper data scientist.😤<a href="#fnref4">↩</a></p></li>
+<li id="fn5"><p>Which of names did the model get incorrect? I’m not sure a human would have done much better. Look at some of those animal names! <span class="citation">@paleontologists</span> WTF?!</p>
+<table class="table" style="font-size: 14px; width: auto !important; margin-left: auto; margin-right: auto;">
+<thead>
+<tr>
+<th style="text-align:left;">
+Animal
+</th>
+<th style="text-align:left;">
+</th>
+<th style="text-align:left;">
+Pokémon
+</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align:left;">
+apatodon
+</td>
+<td style="text-align:left;">
+</td>
+<td style="text-align:left;">
+aerodactyl
+</td>
+</tr>
+<tr>
+<td style="text-align:left;">
+avalonia
+</td>
+<td style="text-align:left;">
+</td>
+<td style="text-align:left;">
+alomomola
+</td>
+</tr>
+<tr>
+<td style="text-align:left;">
+avimimus
+</td>
+<td style="text-align:left;">
+</td>
+<td style="text-align:left;">
+cresselia
+</td>
+</tr>
+<tr>
+<td style="text-align:left;">
+azhdarcho
+</td>
+<td style="text-align:left;">
+</td>
+<td style="text-align:left;">
+dragonite
+</td>
+</tr>
+<tr>
+<td style="text-align:left;">
+banguela
+</td>
+<td style="text-align:left;">
+</td>
+<td style="text-align:left;">
+druddigon
+</td>
+</tr>
+<tr>
+<td style="text-align:left;">
+camelotia
+</td>
+<td style="text-align:left;">
+</td>
+<td style="text-align:left;">
+escavalier
+</td>
+</tr>
+<tr>
+<td style="text-align:left;">
+citipati
+</td>
+<td style="text-align:left;">
+</td>
+<td style="text-align:left;">
+fletchinder
+</td>
+</tr>
+<tr>
+<td style="text-align:left;">
+deinodon
+</td>
+<td style="text-align:left;">
+</td>
+<td style="text-align:left;">
+gothorita
+</td>
+</tr>
+<tr>
+<td style="text-align:left;">
+dracorex
+</td>
+<td style="text-align:left;">
+</td>
+<td style="text-align:left;">
+hitmontop
+</td>
+</tr>
+<tr>
+<td style="text-align:left;">
+elaltitan
+</td>
+<td style="text-align:left;">
+</td>
+<td style="text-align:left;">
+kricketune
+</td>
+</tr>
+<tr>
+<td style="text-align:left;">
+eolambia
+</td>
+<td style="text-align:left;">
+</td>
+<td style="text-align:left;">
+misdreavus
+</td>
+</tr>
+<tr>
+<td style="text-align:left;">
+feilongus
+</td>
+<td style="text-align:left;">
+</td>
+<td style="text-align:left;">
+ninetales
+</td>
+</tr>
+<tr>
+<td style="text-align:left;">
+gastonia
+</td>
+<td style="text-align:left;">
+</td>
+<td style="text-align:left;">
+palpitoad
+</td>
+</tr>
+<tr>
+<td style="text-align:left;">
+glishades
+</td>
+<td style="text-align:left;">
+</td>
+<td style="text-align:left;">
+pheromosa
+</td>
+</tr>
+<tr>
+<td style="text-align:left;">
+gryponyx
+</td>
+<td style="text-align:left;">
+</td>
+<td style="text-align:left;">
+poochyena
+</td>
+</tr>
+<tr>
+<td style="text-align:left;">
+gualicho
+</td>
+<td style="text-align:left;">
+</td>
+<td style="text-align:left;">
+roggenrola
+</td>
+</tr>
+<tr>
+<td style="text-align:left;">
+itemirus
+</td>
+<td style="text-align:left;">
+</td>
+<td style="text-align:left;">
+shroomish
+</td>
+</tr>
+<tr>
+<td style="text-align:left;">
+koparion
+</td>
+<td style="text-align:left;">
+</td>
+<td style="text-align:left;">
+sudowoodo
+</td>
+</tr>
+<tr>
+<td style="text-align:left;">
+kryptops
+</td>
+<td style="text-align:left;">
+</td>
+<td style="text-align:left;">
+togedemaru
+</td>
+</tr>
+<tr>
+<td style="text-align:left;">
+nomingia
+</td>
+<td style="text-align:left;">
+</td>
+<td style="text-align:left;">
+toucannon
+</td>
+</tr>
+<tr>
+<td style="text-align:left;">
+shuvuuia
+</td>
+<td style="text-align:left;">
+</td>
+<td style="text-align:left;">
+tyrantrum
+</td>
+</tr>
+<tr>
+<td style="text-align:left;">
+tapejara
+</td>
+<td style="text-align:left;">
+</td>
+<td style="text-align:left;">
+vanilluxe
+</td>
+</tr>
+<tr>
+<td style="text-align:left;">
+thililua
+</td>
+<td style="text-align:left;">
+</td>
+<td style="text-align:left;">
+volcarona
+</td>
+</tr>
+<tr>
+<td style="text-align:left;">
+velafrons
+</td>
+<td style="text-align:left;">
+</td>
+<td style="text-align:left;">
+</td>
+</tr>
+<tr>
+<td style="text-align:left;">
+zapsalis
+</td>
+<td style="text-align:left;">
+</td>
+<td style="text-align:left;">
+</td>
+</tr>
+</tbody>
+</table>
+<a href="#fnref5">↩</a></li>
+<li id="fn6"><p>I don’t think <em>this</em> is proper data science. 🤷<a href="#fnref6">↩</a></p></li>
+<li id="fn7"><p>Some of these generated Pokémon names are awesome. Email me, Nintendo.<a href="#fnref7">↩</a></p></li>
+</ol>
+</div>
